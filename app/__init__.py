@@ -1,13 +1,11 @@
+import os
 from flask import Flask
-from flask_sqlalchemy import SQLAlchemy
+from dotenv import load_dotenv
+
+load_dotenv()  # loads variables from .env if running locally
 
 app = Flask(__name__)
-app.config['SECRET_KEY'] = 'your_secret_key'
+app.config['SECRET_KEY'] = os.getenv("FLASK_SECRET_KEY", "change_me!")
 
-db = SQLAlchemy(app)
+from app import routes  # this should import your main routes.py
 
-from app.routes import auth, match, geo, sheets
-app.register_blueprint(auth.bp)
-app.register_blueprint(match.bp)
-app.register_blueprint(geo.bp)
-app.register_blueprint(sheets.bp)
