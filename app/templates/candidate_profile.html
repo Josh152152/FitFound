@@ -1,25 +1,58 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8" />
-    <title>Candidate Profile</title>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Create Candidate Profile</title>
 </head>
 <body>
-    <h1>Create Candidate Profile</h1>
-    <form method="POST" action="/candidate/profile">
-        <label for="Email">Email:</label><br />
-        <input type="email" id="Email" name="Email" required /><br /><br />
+    <h2>Create Your Candidate Profile</h2>
+    <form id="profileForm">
+        <label for="Email">Email:</label>
+        <input type="email" id="Email" name="Email" required><br><br>
 
-        <label for="Location">Location:</label><br />
-        <input type="text" id="Location" name="Location" required /><br /><br />
+        <label for="Name">Name:</label>
+        <input type="text" id="Name" name="Name" required><br><br>
 
-        <label for="Radius">Radius (km):</label><br />
-        <input type="number" id="Radius" name="Radius" min="0" required /><br /><br />
+        <label for="Location">Location:</label>
+        <input type="text" id="Location" name="Location" required><br><br>
 
-        <label for="Summary">Skills / Summary:</label><br />
-        <textarea id="Summary" name="Summary" rows="5" cols="30" required></textarea><br /><br />
+        <label for="Radius">Radius (in km):</label>
+        <input type="number" id="Radius" name="Radius" required><br><br>
 
-        <button type="submit">Submit Profile</button>
+        <label for="Summary">Skills Summary:</label>
+        <textarea id="Summary" name="Summary" required></textarea><br><br>
+
+        <button type="submit">Create Profile</button>
     </form>
+
+    <script>
+        document.getElementById('profileForm').addEventListener('submit', function(event) {
+            event.preventDefault();
+            
+            const formData = new FormData(event.target);
+            const data = {};
+            formData.forEach((value, key) => { data[key] = value; });
+            
+            // Send the data to the /candidate/profile endpoint
+            fetch('/candidate/profile', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify(data),
+            })
+            .then(response => response.json())
+            .then(result => {
+                alert(result.message);
+                // Redirect to another page if needed, for example the dashboard
+                window.location.href = '/';
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                alert('There was an error creating your profile.');
+            });
+        });
+    </script>
 </body>
 </html>
