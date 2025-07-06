@@ -10,7 +10,8 @@
         Email: <input type="email" name="Email" required><br>
         Name: <input type="text" name="Name" required><br>
         Password: <input type="password" name="Password" required><br>
-        Type: <select name="Type" required>
+        Type: 
+        <select name="Type" required>
             <option value="Candidate">Candidate</option>
             <option value="Employer">Employer</option>
         </select><br>
@@ -19,20 +20,25 @@
     <p id="message"></p>
 
     <script>
+        // JavaScript to handle form submission
         const form = document.getElementById('signupForm');
         form.addEventListener('submit', async (e) => {
-            e.preventDefault();
+            e.preventDefault();  // Prevent the default form submission
+
+            // Convert form data into a JavaScript object
             const formData = new FormData(form);
             const data = Object.fromEntries(formData.entries());
             
+            // Convert the object to JSON and send it in the request
             const res = await fetch('/signup', {
                 method: 'POST',
                 headers: {
-                    'Content-Type': 'application/json'
+                    'Content-Type': 'application/json'  // This ensures the backend understands JSON
                 },
-                body: JSON.stringify(data) // Ensure it's sent as JSON
+                body: JSON.stringify(data)  // Send the data as JSON
             });
 
+            // Parse the JSON response
             const json = await res.json();
             document.getElementById('message').textContent = json.message || json.error;
         });
