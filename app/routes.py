@@ -1,5 +1,5 @@
 import os
-from flask import request, jsonify
+from flask import request, jsonify, render_template
 from app import app
 from app.sheets import read_all, append_row, find_row_by_column
 from geopy.geocoders import Nominatim
@@ -33,8 +33,11 @@ def text_similarity(a, b):
 def index():
     return "FitFound: Talent Matching App (OpenAI embeddings) is running!"
 
-@app.route("/signup", methods=["POST"])
+@app.route("/signup", methods=["GET", "POST"])
 def signup():
+    if request.method == "GET":
+        return render_template("signup.html")
+
     data = request.json
     if not all(k in data for k in ("Email", "Name", "Password", "Type")):
         return jsonify({"error": "Missing fields"}), 400
@@ -47,6 +50,21 @@ def signup():
         "Type": data["Type"]
     })
     return jsonify({"message": "Signup successful!"})
+
+@app.route("/login", methods=["GET", "POST"])
+def login():
+    if request.method == "GET":
+        return render_template("login.html")
+
+    data = request.json
+    if not all(k in data for k in ("Email", "Password")):
+        return jsonify({"error": "Missing fields"}), 400
+
+    user = find_row_by_column("Users2", "Email", data["Email"])
+    if not user or user.get("Password") != data["Password"]:
+        return jsonify({"error": "Invalid credentials"}), 401
+
+    return jsonify({"message": "Login successful!"})
 
 @app.route("/candidate/profile", methods=["POST"])
 def create_candidate_profile():
