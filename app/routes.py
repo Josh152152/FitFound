@@ -8,9 +8,11 @@ from geopy.distance import geodesic
 import numpy as np
 import openai
 
+# Setting up OpenAI API
 openai.api_key = os.getenv("OPENAI_API_KEY")
 geolocator = Nominatim(user_agent="fitfound-app")
 
+# OpenAI text embedding function
 def get_openai_embedding(text):
     if not text or not text.strip():
         return None
@@ -20,6 +22,7 @@ def get_openai_embedding(text):
     )
     return response.data[0].embedding
 
+# Text similarity using OpenAI embeddings
 def text_similarity(a, b):
     emb_a = get_openai_embedding(a)
     emb_b = get_openai_embedding(b)
@@ -34,17 +37,21 @@ def text_similarity(a, b):
 def index():
     return "FitFound: Talent Matching App (OpenAI embeddings) is running!"
 
+# Signup route
 @app.route("/signup", methods=["GET", "POST"])
 def signup():
     if request.method == "GET":
         return render_template("signup.html")
 
+    # Handling POST for signup
     data = request.json
     if not all(k in data for k in ("Email", "Name", "Password", "Type")):
         return jsonify({"error": "Missing fields"}), 400
+    
     if find_row_by_column("Users2", "Email", data["Email"]):
         return jsonify({"error": "Email already exists"}), 400
-
+    
+    # Hash the password before storing
     hashed_password = generate_password_hash(data["Password"])
 
     append_row("Users2", {
@@ -55,21 +62,24 @@ def signup():
     })
     return jsonify({"message": "Signup successful!"})
 
+# Login route
 @app.route("/login", methods=["GET", "POST"])
 def login():
     if request.method == "GET":
         return render_template("login.html")
 
+    # Handling POST for login
     data = request.json
     if not all(k in data for k in ("Email", "Password")):
         return jsonify({"error": "Missing fields"}), 400
-
+    
     user = find_row_by_column("Users2", "Email", data["Email"])
     if not user or not check_password_hash(user.get("Password", ""), data["Password"]):
         return jsonify({"error": "Invalid credentials"}), 401
 
     return jsonify({"message": "Login successful!"})
 
+# Create Candidate Profile route
 @app.route("/candidate/profile", methods=["POST"])
 def create_candidate_profile():
     data = request.json
@@ -84,6 +94,7 @@ def create_candidate_profile():
     })
     return jsonify({"message": "Profile created!"})
 
+# Post Job route
 @app.route("/employer/job", methods=["POST"])
 def post_job():
     data = request.json
@@ -97,6 +108,7 @@ def post_job():
     })
     return jsonify({"message": "Job posted!"})
 
+# Helper functions for geolocation
 def get_coordinates(location):
     try:
         loc = geolocator.geocode(location, timeout=10)
@@ -106,6 +118,7 @@ def get_coordinates(location):
         pass
     return None
 
+# Geo scoring function
 def geo_score(candidate_loc, job_loc, candidate_radius):
     c_coords = get_coordinates(candidate_loc)
     j_coords = get_coordinates(job_loc)
@@ -116,8 +129,9 @@ def geo_score(candidate_loc, job_loc, candidate_radius):
         candidate_radius = float(candidate_radius)
     except Exception:
         candidate_radius = 0
-    return 1.0 if dist <= candidate_radius else max(0, 1 - dist/100)
+    return 1.0 if dist <= candidate_radius else max(0, 1 - dist / 100)
 
+# Match candidates route for employers
 @app.route("/employer/match_candidates/<int:job_id>", methods=["GET"])
 def match_candidates(job_id):
     jobs = read_all("Jobs2")
