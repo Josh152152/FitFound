@@ -5,9 +5,9 @@ from googleapiclient.discovery import build
 SPREADSHEET_ID = "YOUR_SPREADSHEET_ID_HERE"  # Replace this with your actual spreadsheet ID
 SCOPES = ["https://www.googleapis.com/auth/spreadsheets"]
 
-# Get the absolute path to credentials.json (assumes it is in your project root)
-BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-CREDENTIALS_PATH = os.path.join(BASE_DIR, "credentials.json")
+# Get the absolute path to credentials.json (one level up from /app)
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+CREDENTIALS_PATH = os.path.join(BASE_DIR, "..", "credentials.json")
 
 def get_service():
     creds = Credentials.from_service_account_file(CREDENTIALS_PATH, scopes=SCOPES)
