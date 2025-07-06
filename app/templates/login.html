@@ -1,40 +1,32 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8" />
-  <title>Login</title>
+    <meta charset="UTF-8" />
+    <title>Login</title>
 </head>
 <body>
-  <h2>Login</h2>
-  <form id="loginForm">
-    <input type="email" id="email" placeholder="Email" required /><br/>
-    <input type="password" id="password" placeholder="Password" required /><br/><br/>
-    <button type="submit">Login</button>
-  </form>
+    <h2>Login</h2>
+    <form id="loginForm">
+        Email: <input type="email" name="Email" required><br>
+        Password: <input type="password" name="Password" required><br>
+        <button type="submit">Login</button>
+    </form>
+    <p id="message"></p>
 
-  <p id="loginResult"></p>
-
-  <script>
-    document.getElementById('loginForm').addEventListener('submit', async (e) => {
-      e.preventDefault();
-
-      const data = {
-        Email: document.getElementById('email').value,
-        Password: document.getElementById('password').value,
-      };
-
-      try {
-        const res = await fetch('https://yourdomain.com/login', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(data),
+    <script>
+        const form = document.getElementById('loginForm');
+        form.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const formData = new FormData(form);
+            const data = Object.fromEntries(formData.entries());
+            const res = await fetch('/login', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify(data)
+            });
+            const json = await res.json();
+            document.getElementById('message').textContent = json.message || json.error;
         });
-        const result = await res.json();
-        document.getElementById('loginResult').textContent = JSON.stringify(result);
-      } catch (err) {
-        document.getElementById('loginResult').textContent = 'Error: ' + err.message;
-      }
-    });
-  </script>
+    </script>
 </body>
 </html>
