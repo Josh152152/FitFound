@@ -1,1 +1,10 @@
-
+Flask
+sentence-transformers
+scikit-learn
+numpy
+google-auth
+google-auth-oauthlib
+google-auth-httplib2
+google-api-python-client
+geopy
+werkzeug
