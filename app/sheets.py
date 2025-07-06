@@ -1,16 +1,18 @@
 import os
-from google.oauth2.service_account import Credentials
+import json
+from google.oauth2 import service_account
 from googleapiclient.discovery import build
 
 SPREADSHEET_ID = "YOUR_SPREADSHEET_ID_HERE"  # Replace this with your actual spreadsheet ID
 SCOPES = ["https://www.googleapis.com/auth/spreadsheets"]
 
-# Get the absolute path to credentials.json (one level up from /app)
-BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-CREDENTIALS_PATH = os.path.join(BASE_DIR, "..", "credentials.json")
-
 def get_service():
-    creds = Credentials.from_service_account_file(CREDENTIALS_PATH, scopes=SCOPES)
+    json_creds = os.environ.get("GOOGLE_APPLICATION_CREDENTIALS_JSON")
+    if not json_creds:
+        raise Exception("Missing GOOGLE_APPLICATION_CREDENTIALS_JSON env variable")
+
+    creds_info = json.loads(json_creds)
+    creds = service_account.Credentials.from_service_account_info(creds_info, scopes=SCOPES)
     service = build("sheets", "v4", credentials=creds)
     return service
 
