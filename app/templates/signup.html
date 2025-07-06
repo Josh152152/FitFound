@@ -29,8 +29,16 @@
                 headers: {'Content-Type': 'application/json'},
                 body: JSON.stringify(data)
             });
+
             const json = await res.json();
+
+            // Display message based on response
             document.getElementById('message').textContent = json.message || json.error;
+
+            // If signup is successful, redirect to login page
+            if (json.message === "Signup successful!") {
+                window.location.href = "/login"; // Redirect to login page
+            }
         });
     </script>
 </body>
