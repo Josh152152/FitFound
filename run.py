@@ -1,5 +1,9 @@
 import os
 from app import app
+from flask_cors import CORS
+
+# Enable CORS on your Flask app
+CORS(app)
 
 if __name__ == "__main__":
     # Render provides the PORT env variable; fallback to 5000 for local dev
