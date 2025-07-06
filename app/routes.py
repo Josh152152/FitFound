@@ -44,21 +44,25 @@ def signup():
         return render_template("signup.html")
 
     # Handling POST for signup
-    data = request.json
-    if not all(k in data for k in ("Email", "Name", "Password", "Type")):
+    email = request.form.get("Email")
+    name = request.form.get("Name")
+    password = request.form.get("Password")
+    user_type = request.form.get("Type")
+
+    if not all([email, name, password, user_type]):
         return jsonify({"error": "Missing fields"}), 400
     
-    if find_row_by_column("Users2", "Email", data["Email"]):
+    if find_row_by_column("Users2", "Email", email):
         return jsonify({"error": "Email already exists"}), 400
     
     # Hash the password before storing
-    hashed_password = generate_password_hash(data["Password"])
+    hashed_password = generate_password_hash(password)
 
     append_row("Users2", {
-        "Email": data["Email"],
-        "Name": data["Name"],
+        "Email": email,
+        "Name": name,
         "Password": hashed_password,
-        "Type": data["Type"]
+        "Type": user_type
     })
     return jsonify({"message": "Signup successful!"})
 
@@ -69,12 +73,14 @@ def login():
         return render_template("login.html")
 
     # Handling POST for login
-    data = request.json
-    if not all(k in data for k in ("Email", "Password")):
+    email = request.form.get("Email")
+    password = request.form.get("Password")
+
+    if not all([email, password]):
         return jsonify({"error": "Missing fields"}), 400
     
-    user = find_row_by_column("Users2", "Email", data["Email"])
-    if not user or not check_password_hash(user.get("Password", ""), data["Password"]):
+    user = find_row_by_column("Users2", "Email", email)
+    if not user or not check_password_hash(user.get("Password", ""), password):
         return jsonify({"error": "Invalid credentials"}), 401
 
     return jsonify({"message": "Login successful!"})
