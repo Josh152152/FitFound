@@ -1,26 +1,43 @@
+import os
 from flask import request, jsonify
 from app import app
 from app.sheets import read_all, append_row, find_row_by_column
-from sentence_transformers import SentenceTransformer
-from sklearn.metrics.pairwise import cosine_similarity
-import numpy as np
 from geopy.geocoders import Nominatim
 from geopy.distance import geodesic
+import numpy as np
+import openai
 
-# Load AI and Geo models (do this once)
-model = SentenceTransformer('all-MiniLM-L6-v2')
+openai.api_key = os.getenv("OPENAI_API_KEY")
 geolocator = Nominatim(user_agent="fitfound-app")
+
+def get_openai_embedding(text):
+    if not text or not text.strip():
+        return None
+    response = openai.embeddings.create(
+        input=text,
+        model="text-embedding-3-small"
+    )
+    return response.data[0].embedding
+
+def text_similarity(a, b):
+    emb_a = get_openai_embedding(a)
+    emb_b = get_openai_embedding(b)
+    if emb_a is None or emb_b is None:
+        return 0.0
+    emb_a = np.array(emb_a)
+    emb_b = np.array(emb_b)
+    sim = np.dot(emb_a, emb_b) / (np.linalg.norm(emb_a) * np.linalg.norm(emb_b))
+    return float(sim)
 
 @app.route("/")
 def index():
-    return "FitFound: Talent Matching App is running!"
+    return "FitFound: Talent Matching App (OpenAI embeddings) is running!"
 
 @app.route("/signup", methods=["POST"])
 def signup():
     data = request.json
     if not all(k in data for k in ("Email", "Name", "Password", "Type")):
         return jsonify({"error": "Missing fields"}), 400
-    # For demo: storing plain password (NOT secure!)
     if find_row_by_column("Users2", "Email", data["Email"]):
         return jsonify({"error": "Email already exists"}), 400
     append_row("Users2", {
@@ -58,8 +75,6 @@ def post_job():
     })
     return jsonify({"message": "Job posted!"})
 
-# --- AI & Geo Matching Helpers ---
-
 def get_coordinates(location):
     try:
         loc = geolocator.geocode(location, timeout=10)
@@ -80,13 +95,6 @@ def geo_score(candidate_loc, job_loc, candidate_radius):
     except Exception:
         candidate_radius = 0
     return 1.0 if dist <= candidate_radius else max(0, 1 - dist/100)
-
-def text_similarity(a, b):
-    try:
-        emb = model.encode([a, b])
-        return float(cosine_similarity([emb[0]], [emb[1]])[0][0])
-    except Exception:
-        return 0.0
 
 @app.route("/employer/match_candidates/<int:job_id>", methods=["GET"])
 def match_candidates(job_id):
