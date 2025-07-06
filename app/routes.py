@@ -43,11 +43,16 @@ def signup():
     # Accept both JSON and form data
     if request.is_json:
         data = request.get_json()
+        print("Received JSON data:", data)
     else:
         data = request.form
+        print("Received FORM data:", data.to_dict())
 
-    if not all(k in data for k in ("Email", "Name", "Password", "Type")):
-        return jsonify({"error": "Missing fields"}), 400
+    required_fields = ("Email", "Name", "Password", "Type")
+    missing_fields = [k for k in required_fields if k not in data or not data[k]]
+    if missing_fields:
+        print("Missing fields:", missing_fields)
+        return jsonify({"error": f"Missing fields: {', '.join(missing_fields)}"}), 400
 
     if find_row_by_column("Users2", "Email", data["Email"]):
         return jsonify({"error": "Email already exists"}), 400
@@ -70,11 +75,16 @@ def login():
 
     if request.is_json:
         data = request.get_json()
+        print("Received JSON data:", data)
     else:
         data = request.form
+        print("Received FORM data:", data.to_dict())
 
-    if not all(k in data for k in ("Email", "Password")):
-        return jsonify({"error": "Missing fields"}), 400
+    required_fields = ("Email", "Password")
+    missing_fields = [k for k in required_fields if k not in data or not data[k]]
+    if missing_fields:
+        print("Missing fields:", missing_fields)
+        return jsonify({"error": f"Missing fields: {', '.join(missing_fields)}"}), 400
 
     user = find_row_by_column("Users2", "Email", data["Email"])
     if not user or not check_password_hash(user.get("Password", ""), data["Password"]):
