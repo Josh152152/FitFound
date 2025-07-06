@@ -1,7 +1,7 @@
 Flask
-sentence-transformers
-scikit-learn
+openai
 numpy
+scikit-learn
 google-auth
 google-auth-oauthlib
 google-auth-httplib2
