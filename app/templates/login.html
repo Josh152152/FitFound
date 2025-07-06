@@ -25,7 +25,14 @@
                 body: JSON.stringify(data)
             });
             const json = await res.json();
+
+            // Display message based on response
             document.getElementById('message').textContent = json.message || json.error;
+
+            // If login is successful, redirect to candidate profile page
+            if (json.message === "Login successful!") {
+                window.location.href = "/candidate/profile"; // Redirect to the candidate profile page
+            }
         });
     </script>
 </body>
