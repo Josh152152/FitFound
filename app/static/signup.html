@@ -1,0 +1,48 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Signup</title>
+</head>
+<body>
+  <h2>Signup</h2>
+  <form id="signupForm">
+    <input type="email" id="email" placeholder="Email" required /><br/>
+    <input type="text" id="name" placeholder="Name" required /><br/>
+    <input type="password" id="password" placeholder="Password" required /><br/>
+    <select id="type" required>
+      <option value="">Select type</option>
+      <option value="Candidate">Candidate</option>
+      <option value="Recruiter">Recruiter</option>
+    </select><br/><br/>
+    <button type="submit">Signup</button>
+  </form>
+
+  <p id="signupResult"></p>
+
+  <script>
+    document.getElementById('signupForm').addEventListener('submit', async (e) => {
+      e.preventDefault();
+
+      const data = {
+        Email: document.getElementById('email').value,
+        Name: document.getElementById('name').value,
+        Password: document.getElementById('password').value,
+        Type: document.getElementById('type').value,
+      };
+
+      try {
+        const res = await fetch('https://yourdomain.com/signup', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(data),
+        });
+        const result = await res.json();
+        document.getElementById('signupResult').textContent = JSON.stringify(result);
+      } catch (err) {
+        document.getElementById('signupResult').textContent = 'Error: ' + err.message;
+      }
+    });
+  </script>
+</body>
+</html>
