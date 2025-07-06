@@ -1,0 +1,25 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8" />
+    <title>Candidate Profile</title>
+</head>
+<body>
+    <h1>Create Candidate Profile</h1>
+    <form method="POST" action="/candidate/profile">
+        <label for="Email">Email:</label><br />
+        <input type="email" id="Email" name="Email" required /><br /><br />
+
+        <label for="Location">Location:</label><br />
+        <input type="text" id="Location" name="Location" required /><br /><br />
+
+        <label for="Radius">Radius (km):</label><br />
+        <input type="number" id="Radius" name="Radius" min="0" required /><br /><br />
+
+        <label for="Summary">Skills / Summary:</label><br />
+        <textarea id="Summary" name="Summary" rows="5" cols="30" required></textarea><br /><br />
+
+        <button type="submit">Submit Profile</button>
+    </form>
+</body>
+</html>
