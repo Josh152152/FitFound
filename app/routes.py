@@ -1,5 +1,6 @@
 import os
 from flask import request, jsonify, render_template
+from werkzeug.security import generate_password_hash, check_password_hash
 from app import app
 from app.sheets import read_all, append_row, find_row_by_column
 from geopy.geocoders import Nominatim
@@ -43,10 +44,13 @@ def signup():
         return jsonify({"error": "Missing fields"}), 400
     if find_row_by_column("Users2", "Email", data["Email"]):
         return jsonify({"error": "Email already exists"}), 400
+
+    hashed_password = generate_password_hash(data["Password"])
+
     append_row("Users2", {
         "Email": data["Email"],
         "Name": data["Name"],
-        "Password": data["Password"],
+        "Password": hashed_password,
         "Type": data["Type"]
     })
     return jsonify({"message": "Signup successful!"})
@@ -61,7 +65,7 @@ def login():
         return jsonify({"error": "Missing fields"}), 400
 
     user = find_row_by_column("Users2", "Email", data["Email"])
-    if not user or user.get("Password") != data["Password"]:
+    if not user or not check_password_hash(user.get("Password", ""), data["Password"]):
         return jsonify({"error": "Invalid credentials"}), 401
 
     return jsonify({"message": "Login successful!"})
