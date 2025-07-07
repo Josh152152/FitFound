@@ -92,6 +92,17 @@ def login():
 
     return jsonify({"message": "Login successful!"})
 
+# Endpoint to get user info by email (for greeting on dashboard)
+@app.route("/user", methods=["GET"])
+def get_user():
+    email = request.args.get("email")
+    if not email:
+        return jsonify({"error": "Email required"}), 400
+    user = find_row_by_column("Users2", "Email", email)
+    if not user:
+        return jsonify({"error": "User not found"}), 404
+    return jsonify({"name": user.get("Name", "")})
+
 # Candidate profile creation
 @app.route("/candidate/profile", methods=["POST"])
 def create_candidate_profile():
@@ -103,7 +114,8 @@ def create_candidate_profile():
         "Name": data["Name"],
         "Location": data["Location"],
         "Radius": str(data["Radius"]),
-        "Summary": data["Summary"]
+        "Summary": data["Summary"],
+        "Salary": data.get("Salary", "")
     })
     return jsonify({"message": "Profile created!"})
 
