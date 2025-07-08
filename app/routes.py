@@ -103,11 +103,16 @@ def get_user():
         return jsonify({"error": "User not found"}), 404
     return jsonify({"name": user.get("Name", "")})
 
-# Candidate profile creation
+# Candidate profile creation: updated to support form and JSON submissions robustly!
 @app.route("/candidate/profile", methods=["POST"])
 def create_candidate_profile():
-    data = request.get_json() or request.form
-    if not all(k in data for k in ("Email", "Name", "Location", "Radius", "Summary")):
+    # Accept both JSON and form submissions
+    if request.is_json:
+        data = request.get_json()
+    else:
+        data = dict(request.form)
+    required_fields = ("Email", "Name", "Location", "Radius", "Summary")
+    if not all(k in data and data[k] for k in required_fields):
         return jsonify({"error": "Missing fields"}), 400
     append_row("Candidates2", {
         "Email": data["Email"],
