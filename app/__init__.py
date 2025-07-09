@@ -7,5 +7,9 @@ load_dotenv()  # loads variables from .env if running locally
 app = Flask(__name__)
 app.config['SECRET_KEY'] = os.getenv("FLASK_SECRET_KEY", "change_me!")
 
-from app import routes  # this should import your main routes.py
+# === Enable CORS for Webflow ===
+from flask_cors import CORS
+CORS(app, origins=["https://fitfound.webflow.io"])
+# ===============================
 
+from app import routes  # this should import your main routes.py
