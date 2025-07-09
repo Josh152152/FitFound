@@ -103,7 +103,7 @@ def signup():
     })
     return jsonify({"message": "Signup successful!"})
 
-# --- MOST ROBUST LOGIN LOGIC ---
+# --- Login route (works for Employer/Company or Candidate) ---
 @app.route("/login", methods=["GET", "POST"])
 def login():
     if request.method == "GET":
@@ -117,24 +117,15 @@ def login():
     if not user or not check_password_hash(user.get("Password", ""), data["Password"]):
         return jsonify({"error": "Invalid credentials"}), 401
 
-    # Print all keys and the user row for debugging
-    print("Full user row:", user)
-    print("User keys:", list(user.keys()))
-
-    # Robust: Get the 'Type' field regardless of case or spaces
+    # Get the 'Type' field, robustly
     user_type_raw = None
     for k in user:
         if k.strip().lower() == "type":
             user_type_raw = user[k]
             break
-    print("Raw user_type value:", user_type_raw)
-
-    # Normalize value: strip spaces and capitalize first letter
     user_type = str(user_type_raw).strip().capitalize() if user_type_raw else "Candidate"
     if user_type not in ("Employer", "Candidate"):
         user_type = "Candidate"
-
-    print("Normalized user_type:", user_type)
 
     return jsonify({
         "message": "Login successful!",
@@ -148,4 +139,27 @@ def get_user():
     email = request.args.get("email")
     if not email:
         return jsonify({"error": "Email required"}), 400
-    user = find_row_by_col_
+    user = find_row_by_column("Users2", "Email", email)
+    if not user:
+        return jsonify({"error": "User not found"}), 404
+    return jsonify({"name": user.get("Name", "")})
+
+@app.route("/candidate/profile", methods=["POST"])
+def create_candidate_profile():
+    data = request.get_json(force=True) if request.is_json else dict(request.form)
+    required_fields = ("Email", "Name", "Location", "Radius", "Summary")
+    if not all(k in data and data[k] for k in required_fields):
+        return jsonify({"error": "Missing fields"}), 400
+    append_row("Candidates2", {
+        "Email": data["Email"],
+        "Name": data["Name"],
+        "Location": data["Location"],
+        "Radius": str(data["Radius"]),
+        "Summary": data["Summary"],
+        "Salary": data.get("Salary", "")
+    })
+    return jsonify({"message": "Profile created!"})
+
+@app.route("/test")
+def test():
+    return jsonify({"message": "API is up and running."})
