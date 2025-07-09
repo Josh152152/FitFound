@@ -117,15 +117,21 @@ def login():
     if not user or not check_password_hash(user.get("Password", ""), data["Password"]):
         return jsonify({"error": "Invalid credentials"}), 401
 
-    # Get the 'Type' field, robustly
+    # --- DIAGNOSTIC LOGGING ---
+    print("Full user row:", user)
     user_type_raw = None
     for k in user:
         if k.strip().lower() == "type":
             user_type_raw = user[k]
             break
+    print("Raw user_type value:", repr(user_type_raw))
+    # --- END LOGGING ---
+
     user_type = str(user_type_raw).strip().capitalize() if user_type_raw else "Candidate"
     if user_type not in ("Employer", "Candidate"):
         user_type = "Candidate"
+
+    print("Normalized user_type:", user_type)  # Diagnostic
 
     return jsonify({
         "message": "Login successful!",
