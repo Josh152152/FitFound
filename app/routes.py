@@ -138,7 +138,14 @@ def login():
     user = find_row_by_column("Users2", "Email", data["Email"])
     if not user or not check_password_hash(user.get("Password", ""), data["Password"]):
         return jsonify({"error": "Invalid credentials"}), 401
-    return jsonify({"message": "Login successful!"})
+
+    user_type = user.get("Type", "Candidate")  # default to Candidate if missing
+    return jsonify({
+        "message": "Login successful!",
+        "type": user_type,
+        "email": user.get("Email"),
+        "name": user.get("Name")
+    })
 
 @app.route("/user", methods=["GET"])
 def get_user():
@@ -166,9 +173,6 @@ def create_candidate_profile():
     })
     return jsonify({"message": "Profile created!"})
 
-# ------------ (Add any other candidate/job creation/match routes here) -------------
-
 @app.route("/test")
 def test():
     return jsonify({"message": "API is up and running."})
-
