@@ -2,7 +2,7 @@ import os
 from flask import request, jsonify, render_template
 from werkzeug.security import generate_password_hash, check_password_hash
 from app import app
-from app.sheets import read_all, append_row, find_row_by_column
+from app.sheets import read_all, append_row, find_row_by_column, update_row_by_column
 from geopy.geocoders import Nominatim
 from geopy.distance import geodesic
 import numpy as np
@@ -34,31 +34,90 @@ def text_similarity(a, b):
 def index():
     return "FitFound: Talent Matching App (OpenAI embeddings) is running!"
 
-# Signup route (accepts form data or JSON)
+# ---------------------- EMPLOYER JOB ROUTES ----------------------------
+
+@app.route("/employer/jobs", methods=["GET"])
+def employer_jobs():
+    """
+    Return all jobs for the employer, filter by archived status.
+    Params:
+        email (str): employer's email
+        archived (bool, optional): true for archived, false or missing for active
+    """
+    email = request.args.get("email")
+    archived = request.args.get("archived", "false").lower() == "true"
+    if not email:
+        return jsonify({"error": "Missing employer email"}), 400
+
+    jobs = read_all("Jobs2")  # Should return list of dicts
+
+    filtered = []
+    for job in jobs:
+        if job.get("Email", "").strip().lower() != email.strip().lower():
+            continue
+        is_archived = str(job.get("Archived?", "")).strip().lower() in ["yes", "y", "true", "1"]
+        if archived and is_archived:
+            filtered.append(job)
+        elif not archived and not is_archived:
+            filtered.append(job)
+
+    # Sort by Job Creation Date (if exists, descending)
+    filtered.sort(key=lambda x: x.get("Job Creation Date", ""), reverse=True)
+    return jsonify(filtered)
+
+@app.route("/employer/jobs/archive", methods=["POST"])
+def archive_job():
+    """
+    Archive or unarchive a job by its Name and Creation Date for an employer.
+    Expects JSON:
+      {
+        "email": ...,
+        "name": ...,
+        "job_creation_date": ...,
+        "archive": true|false
+      }
+    """
+    data = request.get_json(force=True)
+    email = data.get("email")
+    name = data.get("name")
+    job_creation_date = data.get("job_creation_date")
+    archive = data.get("archive", True)
+
+    if not (email and name and job_creation_date):
+        return jsonify({"error": "Missing parameters"}), 400
+
+    # Find and update the correct job row
+    jobs = read_all("Jobs2")
+    found = False
+    for idx, job in enumerate(jobs):
+        if (
+            job.get("Email", "").strip().lower() == email.strip().lower() and
+            job.get("Name", "").strip() == name.strip() and
+            job.get("Job Creation Date", "").strip() == job_creation_date.strip()
+        ):
+            found = True
+            update_row_by_column("Jobs2", "Job Creation Date", job_creation_date, {"Archived?": "Yes" if archive else ""})
+            break
+
+    if found:
+        return jsonify({"message": "Job archive status updated."})
+    else:
+        return jsonify({"error": "Job not found."}), 404
+
+# ---------------------- CANDIDATE/CREDENTIAL ROUTES ---------------------
+
 @app.route("/signup", methods=["GET", "POST"])
 def signup():
     if request.method == "GET":
         return render_template("signup.html")
-
-    # Accept both JSON and form data
-    if request.is_json:
-        data = request.get_json()
-        print("Received JSON data:", data)
-    else:
-        data = request.form
-        print("Received FORM data:", data.to_dict())
-
+    data = request.get_json(force=True) if request.is_json else request.form
     required_fields = ("Email", "Name", "Password", "Type")
     missing_fields = [k for k in required_fields if k not in data or not data[k]]
     if missing_fields:
-        print("Missing fields:", missing_fields)
         return jsonify({"error": f"Missing fields: {', '.join(missing_fields)}"}), 400
-
     if find_row_by_column("Users2", "Email", data["Email"]):
         return jsonify({"error": "Email already exists"}), 400
-
     hashed_password = generate_password_hash(data["Password"])
-
     append_row("Users2", {
         "Email": data["Email"],
         "Name": data["Name"],
@@ -67,32 +126,20 @@ def signup():
     })
     return jsonify({"message": "Signup successful!"})
 
-# Login route (accepts form data or JSON)
 @app.route("/login", methods=["GET", "POST"])
 def login():
     if request.method == "GET":
         return render_template("login.html")
-
-    if request.is_json:
-        data = request.get_json()
-        print("Received JSON data:", data)
-    else:
-        data = request.form
-        print("Received FORM data:", data.to_dict())
-
+    data = request.get_json(force=True) if request.is_json else request.form
     required_fields = ("Email", "Password")
     missing_fields = [k for k in required_fields if k not in data or not data[k]]
     if missing_fields:
-        print("Missing fields:", missing_fields)
         return jsonify({"error": f"Missing fields: {', '.join(missing_fields)}"}), 400
-
     user = find_row_by_column("Users2", "Email", data["Email"])
     if not user or not check_password_hash(user.get("Password", ""), data["Password"]):
         return jsonify({"error": "Invalid credentials"}), 401
-
     return jsonify({"message": "Login successful!"})
 
-# Endpoint to get user info by email (for greeting on dashboard)
 @app.route("/user", methods=["GET"])
 def get_user():
     email = request.args.get("email")
@@ -103,14 +150,9 @@ def get_user():
         return jsonify({"error": "User not found"}), 404
     return jsonify({"name": user.get("Name", "")})
 
-# Candidate profile creation: updated to support form and JSON submissions robustly!
 @app.route("/candidate/profile", methods=["POST"])
 def create_candidate_profile():
-    # Accept both JSON and form submissions
-    if request.is_json:
-        data = request.get_json()
-    else:
-        data = dict(request.form)
+    data = request.get_json(force=True) if request.is_json else dict(request.form)
     required_fields = ("Email", "Name", "Location", "Radius", "Summary")
     if not all(k in data and data[k] for k in required_fields):
         return jsonify({"error": "Missing fields"}), 400
@@ -124,5 +166,9 @@ def create_candidate_profile():
     })
     return jsonify({"message": "Profile created!"})
 
-# The rest of your routes remain the same...
-# (Post job, geo calculations, match candidates, etc.)
+# ------------ (Add any other candidate/job creation/match routes here) -------------
+
+@app.route("/test")
+def test():
+    return jsonify({"message": "API is up and running."})
+
