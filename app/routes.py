@@ -38,19 +38,12 @@ def index():
 
 @app.route("/employer/jobs", methods=["GET"])
 def employer_jobs():
-    """
-    Return all jobs for the employer, filter by archived status.
-    Params:
-        email (str): employer's email
-        archived (bool, optional): true for archived, false or missing for active
-    """
     email = request.args.get("email")
     archived = request.args.get("archived", "false").lower() == "true"
     if not email:
         return jsonify({"error": "Missing employer email"}), 400
 
-    jobs = read_all("Jobs2")  # Should return list of dicts
-
+    jobs = read_all("Jobs2")
     filtered = []
     for job in jobs:
         if job.get("Email", "").strip().lower() != email.strip().lower():
@@ -60,33 +53,18 @@ def employer_jobs():
             filtered.append(job)
         elif not archived and not is_archived:
             filtered.append(job)
-
-    # Sort by Job Creation Date (if exists, descending)
     filtered.sort(key=lambda x: x.get("Job Creation Date", ""), reverse=True)
     return jsonify(filtered)
 
 @app.route("/employer/jobs/archive", methods=["POST"])
 def archive_job():
-    """
-    Archive or unarchive a job by its Name and Creation Date for an employer.
-    Expects JSON:
-      {
-        "email": ...,
-        "name": ...,
-        "job_creation_date": ...,
-        "archive": true|false
-      }
-    """
     data = request.get_json(force=True)
     email = data.get("email")
     name = data.get("name")
     job_creation_date = data.get("job_creation_date")
     archive = data.get("archive", True)
-
     if not (email and name and job_creation_date):
         return jsonify({"error": "Missing parameters"}), 400
-
-    # Find and update the correct job row
     jobs = read_all("Jobs2")
     found = False
     for idx, job in enumerate(jobs):
@@ -98,7 +76,6 @@ def archive_job():
             found = True
             update_row_by_column("Jobs2", "Job Creation Date", job_creation_date, {"Archived?": "Yes" if archive else ""})
             break
-
     if found:
         return jsonify({"message": "Job archive status updated."})
     else:
@@ -139,7 +116,19 @@ def login():
     if not user or not check_password_hash(user.get("Password", ""), data["Password"]):
         return jsonify({"error": "Invalid credentials"}), 401
 
-    user_type = user.get("Type", "Candidate")  # default to Candidate if missing
+    # --- Diagnostic log ---
+    print("User row found:", user)
+    print("Raw Type field:", user.get("Type"))
+
+    # --- Type normalization and fallback ---
+    user_type_raw = user.get("Type", "Candidate")
+    user_type = str(user_type_raw).strip().capitalize()
+    if user_type not in ("Employer", "Candidate"):
+        user_type = "Candidate"
+
+    print("Normalized user_type:", user_type)
+    # --- End diagnostic log ---
+
     return jsonify({
         "message": "Login successful!",
         "type": user_type,
