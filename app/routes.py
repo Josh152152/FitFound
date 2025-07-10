@@ -58,7 +58,7 @@ def employer_jobs():
 
 @app.route("/employer/jobs/create", methods=["POST"])
 def create_job():
-    data = request.get_json(force=True) if request.is_json else request.form
+    data = request.form if not request.is_json else request.get_json(force=True)
     required = [
         "Email", "Name", "Company Location", "Job Creation Date",
         "Job Description", "Job location", "Compensation"
@@ -105,6 +105,24 @@ def archive_job():
     else:
         return jsonify({"error": "Job not found."}), 404
 
+# ---------------------- COMPANY PROFILE ROUTE --------------------------
+
+@app.route("/company/create", methods=["POST"])
+def create_company():
+    data = request.form if not request.is_json else request.get_json(force=True)
+    required = ["Email", "companyName", "companyOverview", "companyLocation"]
+    missing = [k for k in required if k not in data or not data[k]]
+    if missing:
+        return jsonify({"error": f"Missing fields: {', '.join(missing)}"}), 400
+
+    append_row("Company2", {
+        "Email": data["Email"],
+        "Company Name": data["companyName"],
+        "Company Overview": data["companyOverview"],
+        "Company Location": data["companyLocation"]
+    })
+    return jsonify({"message": "Company profile created!"})
+
 # ---------------------- CANDIDATE/CREDENTIAL ROUTES ---------------------
 
 @app.route("/signup", methods=["GET", "POST"])
@@ -127,7 +145,6 @@ def signup():
     })
     return jsonify({"message": "Signup successful!"})
 
-# --- Login route (works for Employer/Company or Candidate) ---
 @app.route("/login", methods=["GET", "POST"])
 def login():
     if request.method == "GET":
@@ -141,21 +158,14 @@ def login():
     if not user or not check_password_hash(user.get("Password", ""), data["Password"]):
         return jsonify({"error": "Invalid credentials"}), 401
 
-    # --- DIAGNOSTIC LOGGING ---
-    print("Full user row:", user)
     user_type_raw = None
     for k in user:
         if k.strip().lower() == "type":
             user_type_raw = user[k]
             break
-    print("Raw user_type value:", repr(user_type_raw))
-    # --- END LOGGING ---
-
     user_type = str(user_type_raw).strip().capitalize() if user_type_raw else "Candidate"
     if user_type not in ("Employer", "Candidate"):
         user_type = "Candidate"
-
-    print("Normalized user_type:", user_type)  # Diagnostic
 
     return jsonify({
         "message": "Login successful!",
