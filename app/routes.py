@@ -56,6 +56,30 @@ def employer_jobs():
     filtered.sort(key=lambda x: x.get("Job Creation Date", ""), reverse=True)
     return jsonify(filtered)
 
+@app.route("/employer/jobs/create", methods=["POST"])
+def create_job():
+    data = request.get_json(force=True) if request.is_json else request.form
+    required = [
+        "Email", "Name", "Company Location", "Job Creation Date",
+        "Job Description", "Job location", "Compensation"
+    ]
+    missing = [k for k in required if k not in data or not data[k]]
+    if missing:
+        return jsonify({"error": f"Missing fields: {', '.join(missing)}"}), 400
+
+    append_row("Jobs2", {
+        "Email": data["Email"],
+        "Name": data["Name"],
+        "Company Location": data["Company Location"],
+        "Job Creation Date": data["Job Creation Date"],
+        "Job Description": data["Job Description"],
+        "Job location": data["Job location"],
+        "Compensation": data["Compensation"],
+        "Nber of applicants": data.get("Nber of applicants", "0"),
+        "Archived?": data.get("Archived?", "")
+    })
+    return jsonify({"message": "Job created!"})
+
 @app.route("/employer/jobs/archive", methods=["POST"])
 def archive_job():
     data = request.get_json(force=True)
