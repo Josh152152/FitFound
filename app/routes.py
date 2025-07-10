@@ -109,6 +109,7 @@ def archive_job():
 
 @app.route("/company/create", methods=["POST"])
 def create_company():
+    # Accept both JSON and form POSTs
     data = request.form if not request.is_json else request.get_json(force=True)
     required = ["Email", "companyName", "companyOverview", "companyLocation"]
     missing = [k for k in required if k not in data or not data[k]]
