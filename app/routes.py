@@ -65,20 +65,28 @@ def create_job():
     ]
     missing = [k for k in required if k not in data or not data[k]]
     if missing:
+        print("[ERROR] Missing fields in job creation:", missing)
+        print("[DEBUG] Received data:", dict(data))
         return jsonify({"error": f"Missing fields: {', '.join(missing)}"}), 400
 
-    append_row("Jobs2", {
-        "Email": data["Email"],
-        "Name": data["Name"],
-        "Company Location": data["Company Location"],
-        "Job Creation Date": data["Job Creation Date"],
-        "Job Description": data["Job Description"],
-        "Job location": data["Job location"],
-        "Compensation": data["Compensation"],
-        "Nber of applicants": data.get("Nber of applicants", "0"),
-        "Archived?": data.get("Archived?", "")
-    })
-    return jsonify({"message": "Job created!"})
+    try:
+        print("[INFO] Appending new job to Jobs2:", dict(data))
+        append_row("Jobs2", {
+            "Email": data["Email"],
+            "Name": data["Name"],
+            "Company Location": data["Company Location"],
+            "Job Creation Date": data["Job Creation Date"],
+            "Job Description": data["Job Description"],
+            "Job location": data["Job location"],
+            "Compensation": data["Compensation"],
+            "Nber of applicants": data.get("Nber of applicants", "0"),
+            "Archived?": data.get("Archived?", "")
+        })
+        print("[INFO] Job appended to sheet.")
+        return jsonify({"message": "Job created!"})
+    except Exception as e:
+        print("[ERROR] Failed to append job:", str(e))
+        return jsonify({"error": "Failed to update Google Sheet: " + str(e)}), 500
 
 @app.route("/employer/jobs/archive", methods=["POST"])
 def archive_job():
@@ -109,20 +117,27 @@ def archive_job():
 
 @app.route("/company/create", methods=["POST"])
 def create_company():
-    # Accept both JSON and form POSTs
     data = request.form if not request.is_json else request.get_json(force=True)
     required = ["Email", "companyName", "companyOverview", "companyLocation"]
     missing = [k for k in required if k not in data or not data[k]]
     if missing:
+        print("[ERROR] Missing fields in company create:", missing)
+        print("[DEBUG] Received data:", dict(data))
         return jsonify({"error": f"Missing fields: {', '.join(missing)}"}), 400
 
-    append_row("Company2", {
-        "Email": data["Email"],
-        "Company Name": data["companyName"],
-        "Company Overview": data["companyOverview"],
-        "Company Location": data["companyLocation"]
-    })
-    return jsonify({"message": "Company profile created!"})
+    try:
+        print("[INFO] Appending new company to Company2:", dict(data))
+        append_row("Company2", {
+            "Email": data["Email"],
+            "Company Name": data["companyName"],
+            "Company Overview": data["companyOverview"],
+            "Company Location": data["companyLocation"]
+        })
+        print("[INFO] Company appended to sheet.")
+        return jsonify({"message": "Company profile created!"})
+    except Exception as e:
+        print("[ERROR] Failed to append company:", str(e))
+        return jsonify({"error": "Failed to update Google Sheet: " + str(e)}), 500
 
 # ---------------------- CANDIDATE/CREDENTIAL ROUTES ---------------------
 
@@ -134,6 +149,8 @@ def signup():
     required_fields = ("Email", "Name", "Password", "Type")
     missing_fields = [k for k in required_fields if k not in data or not data[k]]
     if missing_fields:
+        print("[ERROR] Signup missing fields:", missing_fields)
+        print("[DEBUG] Signup received:", dict(data))
         return jsonify({"error": f"Missing fields: {', '.join(missing_fields)}"}), 400
     if find_row_by_column("Users2", "Email", data["Email"]):
         return jsonify({"error": "Email already exists"}), 400
@@ -154,6 +171,8 @@ def login():
     required_fields = ("Email", "Password")
     missing_fields = [k for k in required_fields if k not in data or not data[k]]
     if missing_fields:
+        print("[ERROR] Login missing fields:", missing_fields)
+        print("[DEBUG] Login received:", dict(data))
         return jsonify({"error": f"Missing fields: {', '.join(missing_fields)}"}), 400
     user = find_row_by_column("Users2", "Email", data["Email"])
     if not user or not check_password_hash(user.get("Password", ""), data["Password"]):
