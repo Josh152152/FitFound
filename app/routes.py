@@ -77,11 +77,18 @@ def employer_jobs():
 @app.route("/employer/jobs/create", methods=["POST"])
 def create_job():
     data = request.form if not request.is_json else request.get_json(force=True)
+    # Accept both field naming conventions
+    job_overview = data.get("JobOverview") or data.get("Job Description")
+    job_location = data.get("JobLocation") or data.get("Job location")
     required = [
         "Email", "Name", "Job Creation Date",
-        "JobOverview", "JobLocation", "Compensation"
+        "Compensation"
     ]
     missing = [k for k in required if k not in data or not data[k]]
+    if not job_overview:
+        missing.append("JobOverview/Job Description")
+    if not job_location:
+        missing.append("JobLocation/Job location")
     if missing:
         print("[ERROR] Missing fields in job creation:", missing)
         print("[DEBUG] Received data:", dict(data))
@@ -93,8 +100,8 @@ def create_job():
             "Email": data["Email"],
             "Name": data["Name"],
             "Job Creation Date": data["Job Creation Date"],
-            "JobOverview": data["JobOverview"],
-            "JobLocation": data["JobLocation"],
+            "JobOverview": job_overview,
+            "JobLocation": job_location,
             "Compensation": data["Compensation"],
             "Nber of applicants": data.get("Nber of applicants", "0"),
             "Archived?": data.get("Archived?", "")
@@ -136,20 +143,25 @@ def archive_job():
 def match_candidates():
     job = request.get_json(force=True)
     print("[MATCH JOB PAYLOAD]", job)
-    required = ["Name", "JobOverview", "JobLocation"]
-    missing = [k for k in required if not job.get(k)]
+    # Support both naming conventions
+    job_overview = job.get("JobOverview") or job.get("Job Description")
+    job_location = job.get("JobLocation") or job.get("Job location")
+    missing = []
+    if not job.get("Name"): missing.append("Name")
+    if not job_overview: missing.append("JobOverview/Job Description")
+    if not job_location: missing.append("JobLocation/Job location")
     if missing:
         print("[MATCH MISSING FIELDS]", missing)
         return jsonify({"error": f"Missing required job fields: {', '.join(missing)}"}), 400
 
-    job_embedding = get_openai_embedding(job["JobOverview"])
+    job_embedding = get_openai_embedding(job_overview)
     job_comp = extract_number(job.get("Compensation", ""))
-    job_coords = get_coords(job["JobLocation"])
+    job_coords = get_coords(job_location)
 
     if job_embedding is None:
-        print("[ERROR] JobOverview could not be embedded:", job["JobOverview"])
+        print("[ERROR] JobOverview could not be embedded:", job_overview)
     if not job_coords:
-        print("[ERROR] Could not geocode job location:", job["JobLocation"])
+        print("[ERROR] Could not geocode job location:", job_location)
 
     candidates = read_all("Candidates2")
     results = []
