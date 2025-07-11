@@ -132,17 +132,21 @@ def archive_job():
 @app.route("/employer/match-candidates", methods=["POST"])
 def match_candidates():
     job = request.get_json(force=True)
-    # Expect: job["Name"], job["JobOverview"], job["JobLocation"], job["Compensation"]
+    print("[MATCH JOB PAYLOAD]", job)
     required = ["Name", "JobOverview", "JobLocation"]
-    if not all(job.get(k) for k in required):
-        return jsonify({"error": "Missing required job fields"}), 400
+    missing = [k for k in required if not job.get(k)]
+    if missing:
+        print("[MATCH MISSING FIELDS]", missing)
+        return jsonify({"error": f"Missing required job fields: {', '.join(missing)}"}), 400
 
-    # Embedding for job description
     job_embedding = get_openai_embedding(job["JobOverview"])
     job_comp = extract_number(job.get("Compensation", ""))
-
-    # Geocode job location once
     job_coords = get_coords(job["JobLocation"])
+
+    if job_embedding is None:
+        print("[ERROR] JobOverview could not be embedded:", job["JobOverview"])
+    if not job_coords:
+        print("[ERROR] Could not geocode job location:", job["JobLocation"])
 
     candidates = read_all("Candidates2")
     results = []
@@ -165,9 +169,11 @@ def match_candidates():
         radius = extract_number(cand.get("Radius", "")) or default_radius
         cand_coords = get_coords(cand.get("Location", ""))
         if not (job_coords and cand_coords):
+            print("[CAND SKIP] Missing coords: job_coords:", job_coords, "cand_coords:", cand_coords)
             continue  # skip if cannot geocode either
         dist = geodesic(job_coords, cand_coords).km
         if dist > radius:
+            print("[CAND SKIP] Candidate outside preferred radius:", cand.get("Name"), "dist:", dist, "radius:", radius)
             continue  # Candidate outside preferred radius
 
         # 4. Aggregate score
@@ -180,120 +186,8 @@ def match_candidates():
             "comp_bonus": comp_bonus,
         })
 
-    # Sort by score, descending
     results = sorted(results, key=lambda x: x["score"], reverse=True)
-    # Only return top 10 (customize as needed)
     results = results[:10]
-    # Remove embedding details, just return candidate summary
     return jsonify(results)
 
-# ---------------------- COMPANY PROFILE ROUTE --------------------------
-
-@app.route("/company/create", methods=["POST"])
-def create_company():
-    data = request.form if not request.is_json else request.get_json(force=True)
-    required = ["Email", "companyName", "companyOverview", "companyLocation"]
-    missing = [k for k in required if k not in data or not data[k]]
-    if missing:
-        print("[ERROR] Missing fields in company create:", missing)
-        print("[DEBUG] Received data:", dict(data))
-        return jsonify({"error": f"Missing fields: {', '.join(missing)}"}), 400
-
-    try:
-        print("[INFO] Appending new company to Company2:", dict(data))
-        append_row("Company2", {
-            "Email": data["Email"],
-            "Company Name": data["companyName"],
-            "Company Overview": data["companyOverview"],
-            "Company Location": data["companyLocation"]
-        })
-        print("[INFO] Company appended to sheet.")
-        return jsonify({"message": "Company profile created!"})
-    except Exception as e:
-        print("[ERROR] Failed to append company:", str(e))
-        return jsonify({"error": "Failed to update Google Sheet: " + str(e)}), 500
-
-# ---------------------- CANDIDATE/CREDENTIAL ROUTES ---------------------
-
-@app.route("/signup", methods=["GET", "POST"])
-def signup():
-    if request.method == "GET":
-        return render_template("signup.html")
-    data = request.get_json(force=True) if request.is_json else request.form
-    required_fields = ("Email", "Name", "Password", "Type")
-    missing_fields = [k for k in required_fields if k not in data or not data[k]]
-    if missing_fields:
-        print("[ERROR] Signup missing fields:", missing_fields)
-        print("[DEBUG] Signup received:", dict(data))
-        return jsonify({"error": f"Missing fields: {', '.join(missing_fields)}"}), 400
-    if find_row_by_column("Users2", "Email", data["Email"]):
-        return jsonify({"error": "Email already exists"}), 400
-    hashed_password = generate_password_hash(data["Password"])
-    append_row("Users2", {
-        "Email": data["Email"],
-        "Name": data["Name"],
-        "Password": hashed_password,
-        "Type": data["Type"]
-    })
-    return jsonify({"message": "Signup successful!"})
-
-@app.route("/login", methods=["GET", "POST"])
-def login():
-    if request.method == "GET":
-        return render_template("login.html")
-    data = request.get_json(force=True) if request.is_json else request.form
-    required_fields = ("Email", "Password")
-    missing_fields = [k for k in required_fields if k not in data or not data[k]]
-    if missing_fields:
-        print("[ERROR] Login missing fields:", missing_fields)
-        print("[DEBUG] Login received:", dict(data))
-        return jsonify({"error": f"Missing fields: {', '.join(missing_fields)}"}), 400
-    user = find_row_by_column("Users2", "Email", data["Email"])
-    if not user or not check_password_hash(user.get("Password", ""), data["Password"]):
-        return jsonify({"error": "Invalid credentials"}), 401
-
-    user_type_raw = None
-    for k in user:
-        if k.strip().lower() == "type":
-            user_type_raw = user[k]
-            break
-    user_type = str(user_type_raw).strip().capitalize() if user_type_raw else "Candidate"
-    if user_type not in ("Employer", "Candidate"):
-        user_type = "Candidate"
-
-    return jsonify({
-        "message": "Login successful!",
-        "type": user_type,
-        "email": user.get("Email"),
-        "name": user.get("Name")
-    })
-
-@app.route("/user", methods=["GET"])
-def get_user():
-    email = request.args.get("email")
-    if not email:
-        return jsonify({"error": "Email required"}), 400
-    user = find_row_by_column("Users2", "Email", email)
-    if not user:
-        return jsonify({"error": "User not found"}), 404
-    return jsonify({"name": user.get("Name", "")})
-
-@app.route("/candidate/profile", methods=["POST"])
-def create_candidate_profile():
-    data = request.get_json(force=True) if request.is_json else dict(request.form)
-    required_fields = ("Email", "Name", "Location", "Radius", "Summary")
-    if not all(k in data and data[k] for k in required_fields):
-        return jsonify({"error": "Missing fields"}), 400
-    append_row("Candidates2", {
-        "Email": data["Email"],
-        "Name": data["Name"],
-        "Location": data["Location"],
-        "Radius": str(data["Radius"]),
-        "Summary": data["Summary"],
-        "Salary": data.get("Salary", "")
-    })
-    return jsonify({"message": "Profile created!"})
-
-@app.route("/test")
-def test():
-    return jsonify({"message": "API is up and running."})
+# ... keep the rest of your code unchanged ...
