@@ -61,7 +61,7 @@ def create_job():
     data = request.form if not request.is_json else request.get_json(force=True)
     required = [
         "Email", "Name", "Job Creation Date",
-        "Job Description", "Job location", "Compensation"
+        "JobOverview", "JobLocation", "Compensation"
     ]
     missing = [k for k in required if k not in data or not data[k]]
     if missing:
@@ -75,8 +75,8 @@ def create_job():
             "Email": data["Email"],
             "Name": data["Name"],
             "Job Creation Date": data["Job Creation Date"],
-            "Job Description": data["Job Description"],
-            "Job location": data["Job location"],
+            "JobOverview": data["JobOverview"],
+            "JobLocation": data["JobLocation"],
             "Compensation": data["Compensation"],
             "Nber of applicants": data.get("Nber of applicants", "0"),
             "Archived?": data.get("Archived?", "")
