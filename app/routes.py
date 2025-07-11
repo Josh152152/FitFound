@@ -1,11 +1,12 @@
 import os
+import re
+import numpy as np
 from flask import request, jsonify, render_template
 from werkzeug.security import generate_password_hash, check_password_hash
 from app import app
 from app.sheets import read_all, append_row, find_row_by_column, update_row_by_column
 from geopy.geocoders import Nominatim
 from geopy.distance import geodesic
-import numpy as np
 import openai
 
 openai.api_key = os.getenv("OPENAI_API_KEY")
@@ -19,6 +20,20 @@ def get_openai_embedding(text):
         model="text-embedding-3-small"
     )
     return response.data[0].embedding
+
+def extract_number(text):
+    """Extract first number found in text, fallback to None."""
+    match = re.search(r'(\d+(?:[.,]\d+)?)', str(text))
+    if match:
+        return float(match.group(1).replace(',', '').replace(' ', ''))
+    return None
+
+def get_coords(location):
+    try:
+        loc = geolocator.geocode(location, timeout=10)
+        return (loc.latitude, loc.longitude) if loc else None
+    except Exception:
+        return None
 
 def text_similarity(a, b):
     emb_a = get_openai_embedding(a)
@@ -111,6 +126,66 @@ def archive_job():
         return jsonify({"message": "Job archive status updated."})
     else:
         return jsonify({"error": "Job not found."}), 404
+
+# ---------------------- CANDIDATE MATCHING ROUTE -----------------------
+
+@app.route("/employer/match-candidates", methods=["POST"])
+def match_candidates():
+    job = request.get_json(force=True)
+    # Expect: job["Name"], job["JobOverview"], job["JobLocation"], job["Compensation"]
+    required = ["Name", "JobOverview", "JobLocation"]
+    if not all(job.get(k) for k in required):
+        return jsonify({"error": "Missing required job fields"}), 400
+
+    # Embedding for job description
+    job_embedding = get_openai_embedding(job["JobOverview"])
+    job_comp = extract_number(job.get("Compensation", ""))
+
+    # Geocode job location once
+    job_coords = get_coords(job["JobLocation"])
+
+    candidates = read_all("Candidates2")
+    results = []
+    for cand in candidates:
+        # 1. Embedding Similarity
+        sim = 0.0
+        if cand.get("Summary"):
+            cand_embedding = get_openai_embedding(cand["Summary"])
+            if cand_embedding is not None and job_embedding is not None:
+                sim = float(np.dot(cand_embedding, job_embedding) / (np.linalg.norm(cand_embedding) * np.linalg.norm(job_embedding)))
+        # 2. Salary/Compensation Bonus (optional, soft match)
+        sal = extract_number(cand.get("Salary", ""))
+        comp_bonus = 0.0
+        if sal and job_comp:
+            if job_comp >= sal:
+                comp_bonus = 0.05  # Small boost if job >= candidate expectation
+
+        # 3. Location/Radius filter
+        default_radius = 30.0  # km
+        radius = extract_number(cand.get("Radius", "")) or default_radius
+        cand_coords = get_coords(cand.get("Location", ""))
+        if not (job_coords and cand_coords):
+            continue  # skip if cannot geocode either
+        dist = geodesic(job_coords, cand_coords).km
+        if dist > radius:
+            continue  # Candidate outside preferred radius
+
+        # 4. Aggregate score
+        total_score = sim + comp_bonus
+        results.append({
+            "candidate": cand,
+            "score": total_score,
+            "distance_km": round(dist, 1),
+            "similarity": round(sim, 2),
+            "comp_bonus": comp_bonus,
+        })
+
+    # Sort by score, descending
+    results = sorted(results, key=lambda x: x["score"], reverse=True)
+    # Only return top 10 (customize as needed)
+    results = results[:10]
+    # Remove embedding details, just return candidate summary
+    return jsonify(results)
 
 # ---------------------- COMPANY PROFILE ROUTE --------------------------
 
