@@ -182,12 +182,27 @@ def match_candidates():
 
     if job_embedding is None:
         print("[ERROR] JobOverview could not be embedded:", job_overview)
-    if not job_coords:
+    if not job_coords and "remote" not in job_location.lower():
         print("[ERROR] Could not geocode job location:", job_location)
 
     candidates = read_all("Candidates2")
     results = []
     for cand in candidates:
+        # ---- Remote Matching Logic ----
+        cand_location = str(cand.get("Location", "")).strip().lower()
+        job_location_lc = str(job_location or "").strip().lower()
+
+        # If candidate is remote, only match to remote jobs
+        if cand_location == "remote":
+            if "remote" not in job_location_lc:
+                print("[CAND SKIP] Remote candidate, but job is not remote:", cand.get("Name"))
+                continue  # Remote candidates only match remote jobs
+        else:
+            # If candidate is not remote, skip remote-only jobs
+            if "remote" in job_location_lc and cand_location != "remote":
+                print("[CAND SKIP] Onsite candidate, job is remote only:", cand.get("Name"))
+                continue
+
         # 1. Embedding Similarity
         sim = 0.0
         if cand.get("Summary"):
@@ -201,17 +216,20 @@ def match_candidates():
             if job_comp >= sal:
                 comp_bonus = 0.05  # Small boost if job >= candidate expectation
 
-        # 3. Location/Radius filter
-        default_radius = 30.0  # km
-        radius = extract_number(cand.get("Radius", "")) or default_radius
-        cand_coords = get_coords(cand.get("Location", ""))
-        if not (job_coords and cand_coords):
-            print("[CAND SKIP] Missing coords: job_coords:", job_coords, "cand_coords:", cand_coords)
-            continue  # skip if cannot geocode either
-        dist = geodesic(job_coords, cand_coords).km
-        if dist > radius:
-            print("[CAND SKIP] Candidate outside preferred radius:", cand.get("Name"), "dist:", dist, "radius:", radius)
-            continue  # Candidate outside preferred radius
+        # 3. Location/Radius filter (skip for remote jobs/candidates)
+        skip_distance = (cand_location == "remote") or ("remote" in job_location_lc)
+        dist = 0.0
+        if not skip_distance:
+            default_radius = 30.0  # km
+            radius = extract_number(cand.get("Radius", "")) or default_radius
+            cand_coords = get_coords(cand.get("Location", ""))
+            if not (job_coords and cand_coords):
+                print("[CAND SKIP] Missing coords: job_coords:", job_coords, "cand_coords:", cand_coords)
+                continue  # skip if cannot geocode either
+            dist = geodesic(job_coords, cand_coords).km
+            if dist > radius:
+                print("[CAND SKIP] Candidate outside preferred radius:", cand.get("Name"), "dist:", dist, "radius:", radius)
+                continue  # Candidate outside preferred radius
 
         # 4. Aggregate score
         total_score = sim + comp_bonus
