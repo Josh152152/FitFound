@@ -15,6 +15,28 @@ CORS(app)
 openai.api_key = os.getenv("OPENAI_API_KEY")
 geolocator = Nominatim(user_agent="fitfound-app")
 
+# ---- Cloudflare Turnstile ----
+CLOUDFLARE_TURNSTILE_SECRET = "0x4AAAAAABk1sBpwSFeoJt39y_i-B5lqiNo"
+
+def verify_turnstile(token):
+    """Verify Cloudflare Turnstile token (returns True if valid)."""
+    import requests
+    if not token:
+        return False
+    url = "https://challenges.cloudflare.com/turnstile/v0/siteverify"
+    data = {
+        "secret": CLOUDFLARE_TURNSTILE_SECRET,
+        "response": token,
+        "remoteip": request.remote_addr
+    }
+    try:
+        resp = requests.post(url, data=data, timeout=5)
+        result = resp.json()
+        return result.get("success", False)
+    except Exception as e:
+        print("[ERROR] Turnstile validation failed:", e)
+        return False
+
 def get_openai_embedding(text):
     if not text or not text.strip():
         return None
@@ -244,6 +266,11 @@ def signup():
         print("[ERROR] Signup missing fields:", missing_fields)
         print("[DEBUG] Signup received:", dict(data))
         return jsonify({"error": f"Missing fields: {', '.join(missing_fields)}"}), 400
+    # --- Turnstile verify (frontend must send "cf-turnstile-response") ---
+    cf_token = data.get("cf-turnstile-response")
+    if not verify_turnstile(cf_token):
+        print("[ERROR] Turnstile verification failed")
+        return jsonify({"error": "Cloudflare verification failed. Please try again."}), 400
     if find_row_by_column("Users2", "Email", data["Email"]):
         return jsonify({"error": "Email already exists"}), 400
     hashed_password = generate_password_hash(data["Password"])
