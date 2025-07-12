@@ -116,6 +116,16 @@ def create_job():
         print("[DEBUG] Received data:", dict(data))
         return jsonify({"error": f"Missing fields: {', '.join(missing)}"}), 400
 
+    # ----- Geocode if not already provided -----
+    latitude, longitude = "", ""
+    if data.get("Latitude") and data.get("Longitude"):
+        latitude = data.get("Latitude")
+        longitude = data.get("Longitude")
+    else:
+        coords = get_coords(job_location)
+        if coords:
+            latitude, longitude = coords
+
     try:
         print("[INFO] Appending new job to Jobs2:", dict(data))
         append_row("Jobs2", {
@@ -126,7 +136,9 @@ def create_job():
             "JobLocation": job_location,
             "Compensation": data["Compensation"],
             "Nber of applicants": data.get("Nber of applicants", "0"),
-            "Archived?": data.get("Archived?", "")
+            "Archived?": data.get("Archived?", ""),
+            "Latitude": latitude,
+            "Longitude": longitude
         })
         print("[INFO] Job appended to sheet.")
         return jsonify({"message": "Job created!"})
@@ -178,11 +190,18 @@ def match_candidates():
 
     job_embedding = get_openai_embedding(job_overview)
     job_comp = extract_number(job.get("Compensation", ""))
-    job_coords = get_coords(job_location)
+
+    # ---- Try to get job lat/lon from sheet fields, else geocode ----
+    try:
+        job_lat = float(job.get("Latitude", ""))
+        job_lon = float(job.get("Longitude", ""))
+        job_coords = (job_lat, job_lon)
+    except (TypeError, ValueError):
+        job_coords = get_coords(job_location)
 
     if job_embedding is None:
         print("[ERROR] JobOverview could not be embedded:", job_overview)
-    if not job_coords and "remote" not in job_location.lower():
+    if not job_coords and "remote" not in (job_location or "").lower():
         print("[ERROR] Could not geocode job location:", job_location)
 
     candidates = read_all("Candidates2")
@@ -222,7 +241,13 @@ def match_candidates():
         if not skip_distance:
             default_radius = 30.0  # km
             radius = extract_number(cand.get("Radius", "")) or default_radius
-            cand_coords = get_coords(cand.get("Location", ""))
+            # --- Try to get candidate lat/lon from sheet fields ---
+            try:
+                cand_lat = float(cand.get("Latitude", ""))
+                cand_lon = float(cand.get("Longitude", ""))
+                cand_coords = (cand_lat, cand_lon)
+            except (TypeError, ValueError):
+                cand_coords = get_coords(cand.get("Location", ""))
             if not (job_coords and cand_coords):
                 print("[CAND SKIP] Missing coords: job_coords:", job_coords, "cand_coords:", cand_coords)
                 continue  # skip if cannot geocode either
@@ -347,13 +372,26 @@ def create_candidate_profile():
     required_fields = ("Email", "Name", "Location", "Radius", "Summary")
     if not all(k in data and data[k] for k in required_fields):
         return jsonify({"error": "Missing fields"}), 400
+
+    # Geocode and store lat/lon if not already present
+    latitude, longitude = "", ""
+    if data.get("Latitude") and data.get("Longitude"):
+        latitude = data.get("Latitude")
+        longitude = data.get("Longitude")
+    else:
+        coords = get_coords(data["Location"])
+        if coords:
+            latitude, longitude = coords
+
     append_row("Candidates2", {
         "Email": data["Email"],
         "Name": data["Name"],
         "Location": data["Location"],
         "Radius": str(data["Radius"]),
         "Summary": data["Summary"],
-        "Salary": data.get("Salary", "")
+        "Salary": data.get("Salary", ""),
+        "Latitude": latitude,
+        "Longitude": longitude
     })
     return jsonify({"message": "Profile created!"})
 
