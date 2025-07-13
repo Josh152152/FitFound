@@ -35,8 +35,8 @@ def ai_profile():
     if missing:
         return jsonify({"error": f"Missing fields: {', '.join(missing)}"}), 400
     prompt = PROFILE_PROMPT.format(**data)
-    response = openai.ChatCompletion.create(
+    response = openai.chat.completions.create(
         model="gpt-4o",
         messages=[{"role": "system", "content": prompt}]
     )
-    return jsonify({"profile_summary": response.choices[0].message["content"]})
+    return jsonify({"profile_summary": response.choices[0].message.content})
