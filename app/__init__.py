@@ -2,7 +2,6 @@ import os
 from flask import Flask
 from dotenv import load_dotenv
 
-# Load .env variables
 # Load environment variables from the .env file
 load_dotenv()
 
