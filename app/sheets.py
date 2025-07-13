@@ -4,8 +4,6 @@ from google.oauth2 import service_account
 from googleapiclient.discovery import build
 
 SPREADSHEET_ID = "1UqkyamJVr9tyrNk_WI55UwustHoaIjESGbFPYwFHtXI"  # Your actual spreadsheet ID
-# Set your Google Sheet ID here (this will work for all tabs in the same file)
-SPREADSHEET_ID = "1UqkyamJVr9tyrNk_WI55UwustHoaIjESGbFPYwFHtXI"
 SCOPES = ["https://www.googleapis.com/auth/spreadsheets"]
 
 def get_service():
@@ -13,11 +11,13 @@ def get_service():
     json_creds = os.environ.get("GOOGLE_APPLICATION_CREDENTIALS_JSON")
     if not json_creds:
         raise Exception("Missing GOOGLE_APPLICATION_CREDENTIALS_JSON env variable")
+    
     creds_info = json.loads(json_creds)
     creds = service_account.Credentials.from_service_account_info(creds_info, scopes=SCOPES)
+    
+    # Return the service object for interacting with Google Sheets API
     service = build("sheets", "v4", credentials=creds)
     return service
-    return build("sheets", "v4", credentials=creds)
 
 def read_all(sheet_name):
     service = get_service()
@@ -27,6 +27,7 @@ def read_all(sheet_name):
     values = result.get("values", [])
     if not values:
         return []
+    
     headers = values[0]
     # Fill missing cells with "" so all rows have the same length as headers
     return [dict(zip(headers, row + [""] * (len(headers) - len(row)))) for row in values[1:]]
@@ -38,6 +39,7 @@ def append_row(sheet_name, row_dict):
     headers = list(rows[0].keys()) if rows else list(row_dict.keys())
     # Always preserve the order of headers for consistency
     row = [row_dict.get(header, "") for header in headers]
+    
     service = get_service()
     service.spreadsheets().values().append(
         spreadsheetId=SPREADSHEET_ID,
@@ -65,9 +67,9 @@ def update_row_by_column(sheet_name, column_name, value, update_dict):
     values = result.get("values", [])
     if not values:
         return False
+    
     headers = values[0]
     for idx, row in enumerate(values[1:], start=2):  # start=2 because of 1-based index and header row
-    for idx, row in enumerate(values[1:], start=2):  # 1-based index, 1 for header
         row_dict = dict(zip(headers, row + [""] * (len(headers) - len(row))))
         if str(row_dict.get(column_name, "")).strip() == str(value).strip():
             # Update each specified column
@@ -76,14 +78,6 @@ def update_row_by_column(sheet_name, column_name, value, update_dict):
                 if k in headers:
                     col_idx = headers.index(k)
                     # Google Sheets API needs A1 notation, so we build the cell range
-                    cell_range = f"{sheet_name}!{chr(65 + col_idx)}{idx}"
-                    # Handle columns beyond Z (AA, AB, etc.)
-                    def col_letter(n):
-                        result = ""
-                        while n >= 0:
-                            result = chr(n % 26 + 65) + result
-                            n = n // 26 - 1
-                        return result
                     cell_range = f"{sheet_name}!{col_letter(col_idx)}{idx}"
                     updates.append({
                         "range": cell_range,
@@ -97,3 +91,14 @@ def update_row_by_column(sheet_name, column_name, value, update_dict):
                 ).execute()
             return True
     return False
+
+def col_letter(n):
+    """
+    Converts a column index (0-based) to an Excel-style column letter.
+    Handles columns beyond 'Z' (e.g., 'AA', 'AB', etc.)
+    """
+    result = ""
+    while n >= 0:
+        result = chr(n % 26 + 65) + result
+        n = n // 26 - 1
+    return result
