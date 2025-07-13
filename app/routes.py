@@ -7,8 +7,7 @@ from app.sheets import read_all, append_row, find_row_by_column, update_row_by_c
 from geopy.geocoders import Nominatim
 from geopy.distance import geodesic
 import openai
-
-main_bp = Blueprint('main', __name__)
+import requests
 
 # OpenAI API Key
 openai.api_key = os.getenv("OPENAI_API_KEY")
@@ -22,7 +21,6 @@ CLOUDFLARE_TURNSTILE_SECRET = "0x4AAAAAABk1sBpwSFeoJt39y_i-B5lqiNo"
 # Function to verify Cloudflare Turnstile token
 def verify_turnstile(token):
     """Verify Cloudflare Turnstile token (returns True if valid)."""
-    import requests
     if not token:
         return False
     url = "https://challenges.cloudflare.com/turnstile/v0/siteverify"
@@ -76,10 +74,12 @@ def text_similarity(a, b):
     sim = np.dot(emb_a, emb_b) / (np.linalg.norm(emb_a) * np.linalg.norm(emb_b))
     return float(sim)
 
+main_bp = Blueprint('main', __name__)
+
 # Route for testing if the API is running
-@main_bp.route("/")
-def index():
-    return "FitFound: Talent Matching App (OpenAI embeddings) is running!"
+@main_bp.route("/test")
+def test():
+    return jsonify({"message": "API is up and running."})
 
 # ---------------------- EMPLOYER JOB ROUTES ----------------------------
 
@@ -142,31 +142,6 @@ def create_job():
         return jsonify({"message": "Job created!"})
     except Exception as e:
         return jsonify({"error": "Failed to update Google Sheet: " + str(e)}), 500
-
-@main_bp.route("/employer/jobs/archive", methods=["POST"])
-def archive_job():
-    data = request.get_json(force=True)
-    email = data.get("email")
-    name = data.get("name")
-    job_creation_date = data.get("job_creation_date")
-    archive = data.get("archive", True)
-    if not (email and name and job_creation_date):
-        return jsonify({"error": "Missing parameters"}), 400
-    jobs = read_all("Jobs2")
-    found = False
-    for idx, job in enumerate(jobs):
-        if (
-            job.get("Email", "").strip().lower() == email.strip().lower() and
-            job.get("Name", "").strip() == name.strip() and
-            job.get("Job Creation Date", "").strip() == job_creation_date.strip()
-        ):
-            found = True
-            update_row_by_column("Jobs2", "Job Creation Date", job_creation_date, {"Archived?": "Yes" if archive else ""})
-            break
-    if found:
-        return jsonify({"message": "Job archive status updated."})
-    else:
-        return jsonify({"error": "Job not found."}), 404
 
 # ---------------------- CANDIDATE MATCHING ROUTE -----------------------
 
@@ -276,6 +251,7 @@ def signup():
     if missing_fields:
         return jsonify({"error": f"Missing fields: {', '.join(missing_fields)}"}), 400
 
+    # Turnstile verification
     cf_token = data.get("cf-turnstile-response")
     if not verify_turnstile(cf_token):
         return jsonify({"error": "Cloudflare verification failed. Please try again."}), 400
@@ -350,7 +326,3 @@ def create_candidate_profile():
         "Longitude": longitude
     })
     return jsonify({"message": "Profile created!"})
-
-@main_bp.route("/test")
-def test():
-    return jsonify({"message": "API is up and running."})
