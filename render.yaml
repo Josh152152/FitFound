@@ -2,6 +2,7 @@ services:
   - type: web
     name: ai-talent-marketplace
     env: python
+    python_version: 3.9  # or 3.10
     buildCommand: |
       pip install --upgrade setuptools wheel pip  # Force install build tools first
       pip install -r requirements.txt            # Install other dependencies
