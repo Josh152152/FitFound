@@ -1,4 +1,4 @@
-# Build Tools (ensure these are installed first)
+# Build tools (ensure these are installed first)
 setuptools>=56.0.0
 wheel>=0.36.0
 pip>=21.0.0
