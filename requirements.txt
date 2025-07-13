@@ -1,16 +1,35 @@
+# Machine Learning & Data Libraries
 scikit-learn
+
+# Google Authentication and API Libraries
 google-auth
 google-auth-oauthlib
 google-auth-httplib2
 google-api-python-client
+
+# Environment Variable Handling
 python-dotenv
+
+# Flask & Related Libraries
 flask-cors
 Flask==2.0.3
+
+# OpenAI API
 openai==0.11.0
+
+# HTTP Requests Library
 requests==2.26.0
+
+# Geopy for Geocoding
 geopy==2.2.0
+
+# Werkzeug (Used by Flask)
 werkzeug==2.0.3
+
+# Numerical Libraries
 numpy==1.24.0
+
+# Build Tools
 setuptools>=56.0.0
 wheel>=0.36.0
 pip>=21.0.0
