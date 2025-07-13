@@ -1,3 +1,8 @@
+# Build Tools (ensure these are installed first)
+setuptools>=56.0.0
+wheel>=0.36.0
+pip>=21.0.0
+
 # Machine Learning & Data Libraries
 scikit-learn
 
@@ -28,8 +33,3 @@ werkzeug==2.0.3
 
 # Numerical Libraries
 numpy==1.24.0
-
-# Build Tools
-setuptools>=56.0.0
-wheel>=0.36.0
-pip>=21.0.0
