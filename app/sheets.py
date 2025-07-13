@@ -8,7 +8,9 @@ SPREADSHEET_ID = "1UqkyamJVr9tyrNk_WI55UwustHoaIjESGbFPYwFHtXI"
 SCOPES = ["https://www.googleapis.com/auth/spreadsheets"]
 
 def get_service():
-    # Get the service account JSON credentials from an ENV variable
+    """
+    Get the Google Sheets API service using service account credentials.
+    """
     json_creds = os.environ.get("GOOGLE_APPLICATION_CREDENTIALS_JSON")
     if not json_creds:
         raise Exception("Missing GOOGLE_APPLICATION_CREDENTIALS_JSON env variable")
@@ -17,6 +19,10 @@ def get_service():
     return build("sheets", "v4", credentials=creds)
 
 def read_all(sheet_name):
+    """
+    Reads all rows of data from the given sheet tab name and returns them as a list of dictionaries.
+    The first row is treated as the header, and each row's values are matched to the header keys.
+    """
     service = get_service()
     result = service.spreadsheets().values().get(
         spreadsheetId=SPREADSHEET_ID, range=f"{sheet_name}!A1:Z1000"
@@ -28,6 +34,10 @@ def read_all(sheet_name):
     return [dict(zip(headers, row + [""] * (len(headers) - len(row)))) for row in values[1:]]
 
 def append_row(sheet_name, row_dict):
+    """
+    Appends a new row to the specified sheet.
+    The row dictionary keys should match the column headers.
+    """
     # Ensure headers exist (by reading current data)
     rows = read_all(sheet_name)
     headers = list(rows[0].keys()) if rows else list(row_dict.keys())
@@ -36,12 +46,16 @@ def append_row(sheet_name, row_dict):
     service = get_service()
     service.spreadsheets().values().append(
         spreadsheetId=SPREADSHEET_ID,
-        range=sheet_name,
+        range=f"{sheet_name}!A1",  # Specify where the row should be appended
         valueInputOption="USER_ENTERED",
         body={"values": [row]},
     ).execute()
 
 def find_row_by_column(sheet_name, column_name, value):
+    """
+    Searches for a row in the given sheet where the column_name matches the provided value.
+    Returns the row if found, otherwise returns None.
+    """
     rows = read_all(sheet_name)
     for row in rows:
         if str(row.get(column_name, "")).strip() == str(value).strip():
