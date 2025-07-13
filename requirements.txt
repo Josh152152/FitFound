@@ -10,3 +10,4 @@ geopy
 werkzeug
 python-dotenv
 flask-cors
+requests
