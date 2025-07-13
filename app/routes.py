@@ -161,9 +161,9 @@ def match_candidates():
     job_comp = extract_number(job.get("Compensation", ""))
 
     try:
-        job_lat = float(job.get("Latitude", ""))
-        job_lon = float(job.get("Longitude", ""))
-        job_coords = (job_lat, job_lon)
+        job_lat = float(job.get("Latitude", "")) if job.get("Latitude") else None
+        job_lon = float(job.get("Longitude", "")) if job.get("Longitude") else None
+        job_coords = (job_lat, job_lon) if job_lat and job_lon else get_coords(job_location)
     except (TypeError, ValueError):
         job_coords = get_coords(job_location)
 
