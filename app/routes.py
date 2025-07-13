@@ -10,12 +10,16 @@ import openai
 
 main_bp = Blueprint('main', __name__)
 
+# OpenAI API Key
 openai.api_key = os.getenv("OPENAI_API_KEY")
+
+# Geolocator setup using Geopy
 geolocator = Nominatim(user_agent="fitfound-app")
 
-# ---- Cloudflare Turnstile ----
+# Cloudflare Turnstile secret for form validation
 CLOUDFLARE_TURNSTILE_SECRET = "0x4AAAAAABk1sBpwSFeoJt39y_i-B5lqiNo"
 
+# Function to verify Cloudflare Turnstile token
 def verify_turnstile(token):
     """Verify Cloudflare Turnstile token (returns True if valid)."""
     import requests
@@ -35,6 +39,7 @@ def verify_turnstile(token):
         print("[ERROR] Turnstile validation failed:", e)
         return False
 
+# Function to get OpenAI embedding for text
 def get_openai_embedding(text):
     if not text or not text.strip():
         return None
@@ -44,6 +49,7 @@ def get_openai_embedding(text):
     )
     return response.data[0].embedding
 
+# Function to extract numbers from text
 def extract_number(text):
     """Extract first number found in text, fallback to None."""
     match = re.search(r'(\d+(?:[.,]\d+)?)', str(text))
@@ -51,6 +57,7 @@ def extract_number(text):
         return float(match.group(1).replace(',', '').replace(' ', ''))
     return None
 
+# Function to get coordinates for a location
 def get_coords(location):
     try:
         loc = geolocator.geocode(location, timeout=10)
@@ -58,6 +65,7 @@ def get_coords(location):
     except Exception:
         return None
 
+# Function to calculate text similarity using OpenAI embeddings
 def text_similarity(a, b):
     emb_a = get_openai_embedding(a)
     emb_b = get_openai_embedding(b)
@@ -68,6 +76,7 @@ def text_similarity(a, b):
     sim = np.dot(emb_a, emb_b) / (np.linalg.norm(emb_a) * np.linalg.norm(emb_b))
     return float(sim)
 
+# Route for testing if the API is running
 @main_bp.route("/")
 def index():
     return "FitFound: Talent Matching App (OpenAI embeddings) is running!"
@@ -97,24 +106,17 @@ def employer_jobs():
 @main_bp.route("/employer/jobs/create", methods=["POST"])
 def create_job():
     data = request.form if not request.is_json else request.get_json(force=True)
-    # Accept both field naming conventions
     job_overview = data.get("JobOverview") or data.get("Job Description")
     job_location = data.get("JobLocation") or data.get("Job location")
-    required = [
-        "Email", "Name", "Job Creation Date",
-        "Compensation"
-    ]
+    required = ["Email", "Name", "Job Creation Date", "Compensation"]
     missing = [k for k in required if k not in data or not data[k]]
     if not job_overview:
         missing.append("JobOverview/Job Description")
     if not job_location:
         missing.append("JobLocation/Job location")
     if missing:
-        print("[ERROR] Missing fields in job creation:", missing)
-        print("[DEBUG] Received data:", dict(data))
         return jsonify({"error": f"Missing fields: {', '.join(missing)}"}), 400
 
-    # ----- Geocode if not already provided -----
     latitude, longitude = "", ""
     if data.get("Latitude") and data.get("Longitude"):
         latitude = data.get("Latitude")
@@ -125,7 +127,6 @@ def create_job():
             latitude, longitude = coords
 
     try:
-        print("[INFO] Appending new job to Jobs2:", dict(data))
         append_row("Jobs2", {
             "Email": data["Email"],
             "Name": data["Name"],
@@ -138,10 +139,8 @@ def create_job():
             "Latitude": latitude,
             "Longitude": longitude
         })
-        print("[INFO] Job appended to sheet.")
         return jsonify({"message": "Job created!"})
     except Exception as e:
-        print("[ERROR] Failed to append job:", str(e))
         return jsonify({"error": "Failed to update Google Sheet: " + str(e)}), 500
 
 @main_bp.route("/employer/jobs/archive", methods=["POST"])
@@ -174,8 +173,6 @@ def archive_job():
 @main_bp.route("/employer/match-candidates", methods=["POST"])
 def match_candidates():
     job = request.get_json(force=True)
-    print("[MATCH JOB PAYLOAD]", job)
-    # Support both naming conventions
     job_overview = job.get("JobOverview") or job.get("Job Description")
     job_location = job.get("JobLocation") or job.get("Job location")
     missing = []
@@ -183,13 +180,11 @@ def match_candidates():
     if not job_overview: missing.append("JobOverview/Job Description")
     if not job_location: missing.append("JobLocation/Job location")
     if missing:
-        print("[MATCH MISSING FIELDS]", missing)
         return jsonify({"error": f"Missing required job fields: {', '.join(missing)}"}), 400
 
     job_embedding = get_openai_embedding(job_overview)
     job_comp = extract_number(job.get("Compensation", ""))
 
-    # ---- Try to get job lat/lon from sheet fields, else geocode ----
     try:
         job_lat = float(job.get("Latitude", ""))
         job_lon = float(job.get("Longitude", ""))
@@ -197,49 +192,32 @@ def match_candidates():
     except (TypeError, ValueError):
         job_coords = get_coords(job_location)
 
-    if job_embedding is None:
-        print("[ERROR] JobOverview could not be embedded:", job_overview)
-    if not job_coords and "remote" not in (job_location or "").lower():
-        print("[ERROR] Could not geocode job location:", job_location)
-
     candidates = read_all("Candidates2")
     results = []
     for cand in candidates:
-        # ---- Remote Matching Logic ----
         cand_location = str(cand.get("Location", "")).strip().lower()
         job_location_lc = str(job_location or "").strip().lower()
 
-        # If candidate is remote, only match to remote jobs
-        if cand_location == "remote":
-            if "remote" not in job_location_lc:
-                print("[CAND SKIP] Remote candidate, but job is not remote:", cand.get("Name"))
-                continue  # Remote candidates only match remote jobs
-        else:
-            # If candidate is not remote, skip remote-only jobs
-            if "remote" in job_location_lc and cand_location != "remote":
-                print("[CAND SKIP] Onsite candidate, job is remote only:", cand.get("Name"))
-                continue
+        if cand_location == "remote" and "remote" not in job_location_lc:
+            continue
 
-        # 1. Embedding Similarity
         sim = 0.0
         if cand.get("Summary"):
             cand_embedding = get_openai_embedding(cand["Summary"])
             if cand_embedding is not None and job_embedding is not None:
                 sim = float(np.dot(cand_embedding, job_embedding) / (np.linalg.norm(cand_embedding) * np.linalg.norm(job_embedding)))
-        # 2. Salary/Compensation Bonus (optional, soft match)
+
         sal = extract_number(cand.get("Salary", ""))
         comp_bonus = 0.0
         if sal and job_comp:
             if job_comp >= sal:
                 comp_bonus = 0.05  # Small boost if job >= candidate expectation
 
-        # 3. Location/Radius filter (skip for remote jobs/candidates)
         skip_distance = (cand_location == "remote") or ("remote" in job_location_lc)
         dist = 0.0
         if not skip_distance:
             default_radius = 30.0  # km
             radius = extract_number(cand.get("Radius", "")) or default_radius
-            # --- Try to get candidate lat/lon from sheet fields ---
             try:
                 cand_lat = float(cand.get("Latitude", ""))
                 cand_lon = float(cand.get("Longitude", ""))
@@ -247,14 +225,11 @@ def match_candidates():
             except (TypeError, ValueError):
                 cand_coords = get_coords(cand.get("Location", ""))
             if not (job_coords and cand_coords):
-                print("[CAND SKIP] Missing coords: job_coords:", job_coords, "cand_coords:", cand_coords)
-                continue  # skip if cannot geocode either
+                continue
             dist = geodesic(job_coords, cand_coords).km
             if dist > radius:
-                print("[CAND SKIP] Candidate outside preferred radius:", cand.get("Name"), "dist:", dist, "radius:", radius)
-                continue  # Candidate outside preferred radius
+                continue
 
-        # 4. Aggregate score
         total_score = sim + comp_bonus
         results.append({
             "candidate": cand,
@@ -276,22 +251,17 @@ def create_company():
     required = ["Email", "companyName", "companyOverview", "companyLocation"]
     missing = [k for k in required if k not in data or not data[k]]
     if missing:
-        print("[ERROR] Missing fields in company create:", missing)
-        print("[DEBUG] Received data:", dict(data))
         return jsonify({"error": f"Missing fields: {', '.join(missing)}"}), 400
 
     try:
-        print("[INFO] Appending new company to Company2:", dict(data))
         append_row("Company2", {
             "Email": data["Email"],
             "Company Name": data["companyName"],
             "Company Overview": data["companyOverview"],
             "Company Location": data["companyLocation"]
         })
-        print("[INFO] Company appended to sheet.")
         return jsonify({"message": "Company profile created!"})
     except Exception as e:
-        print("[ERROR] Failed to append company:", str(e))
         return jsonify({"error": "Failed to update Google Sheet: " + str(e)}), 500
 
 # ---------------------- CANDIDATE/CREDENTIAL ROUTES ---------------------
@@ -304,16 +274,15 @@ def signup():
     required_fields = ("Email", "Name", "Password", "Type")
     missing_fields = [k for k in required_fields if k not in data or not data[k]]
     if missing_fields:
-        print("[ERROR] Signup missing fields:", missing_fields)
-        print("[DEBUG] Signup received:", dict(data))
         return jsonify({"error": f"Missing fields: {', '.join(missing_fields)}"}), 400
-    # --- Turnstile verify (frontend must send "cf-turnstile-response") ---
+
     cf_token = data.get("cf-turnstile-response")
     if not verify_turnstile(cf_token):
-        print("[ERROR] Turnstile verification failed")
         return jsonify({"error": "Cloudflare verification failed. Please try again."}), 400
+
     if find_row_by_column("Users2", "Email", data["Email"]):
         return jsonify({"error": "Email already exists"}), 400
+
     hashed_password = generate_password_hash(data["Password"])
     append_row("Users2", {
         "Email": data["Email"],
@@ -331,25 +300,15 @@ def login():
     required_fields = ("Email", "Password")
     missing_fields = [k for k in required_fields if k not in data or not data[k]]
     if missing_fields:
-        print("[ERROR] Login missing fields:", missing_fields)
-        print("[DEBUG] Login received:", dict(data))
         return jsonify({"error": f"Missing fields: {', '.join(missing_fields)}"}), 400
     user = find_row_by_column("Users2", "Email", data["Email"])
     if not user or not check_password_hash(user.get("Password", ""), data["Password"]):
         return jsonify({"error": "Invalid credentials"}), 401
 
-    user_type_raw = None
-    for k in user:
-        if k.strip().lower() == "type":
-            user_type_raw = user[k]
-            break
-    user_type = str(user_type_raw).strip().capitalize() if user_type_raw else "Candidate"
-    if user_type not in ("Employer", "Candidate"):
-        user_type = "Candidate"
-
+    user_type_raw = user.get("Type", "").strip().capitalize()
     return jsonify({
         "message": "Login successful!",
-        "type": user_type,
+        "type": user_type_raw or "Candidate",
         "email": user.get("Email"),
         "name": user.get("Name")
     })
@@ -371,7 +330,6 @@ def create_candidate_profile():
     if not all(k in data and data[k] for k in required_fields):
         return jsonify({"error": "Missing fields"}), 400
 
-    # Geocode and store lat/lon if not already present
     latitude, longitude = "", ""
     if data.get("Latitude") and data.get("Longitude"):
         latitude = data.get("Latitude")
