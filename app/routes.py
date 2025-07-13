@@ -1,16 +1,14 @@
 import os
 import re
 import numpy as np
-from flask import request, jsonify, render_template
+from flask import Blueprint, request, jsonify, render_template
 from werkzeug.security import generate_password_hash, check_password_hash
-from app import app
 from app.sheets import read_all, append_row, find_row_by_column, update_row_by_column
 from geopy.geocoders import Nominatim
 from geopy.distance import geodesic
 import openai
-from flask_cors import CORS
 
-CORS(app)
+main_bp = Blueprint('main', __name__)
 
 openai.api_key = os.getenv("OPENAI_API_KEY")
 geolocator = Nominatim(user_agent="fitfound-app")
@@ -70,103 +68,13 @@ def text_similarity(a, b):
     sim = np.dot(emb_a, emb_b) / (np.linalg.norm(emb_a) * np.linalg.norm(emb_b))
     return float(sim)
 
-@app.route("/")
+@main_bp.route("/")
 def index():
     return "FitFound: Talent Matching App (OpenAI embeddings) is running!"
 
-# ---------------------- AI JOB PROFILE ENDPOINT ------------------------
-
-PROFILE_PROMPT = """
-You are an expert technical recruiter. Given the following answers, draft a clear, structured job profile:
-
-Role: {role}
-Hard Skills: {hard_skills}
-Soft Skills: {soft_skills}
-Years of Experience: {years_xp}
-Team Size: {team_size}
-Line Manager: {line_manager}
-
-Please return a summary including:
-- Job Title
-- Hard Skills
-- Soft Skills
-- Required Experience
-- Team Size
-- Line Manager Title
-- 3-5 Key Responsibilities (typical for this role)
-"""
-
-@app.route("/ai/profile", methods=["POST"])
-def ai_profile():
-    data = request.get_json(force=True)
-    required_fields = ["role", "hard_skills", "soft_skills", "years_xp", "team_size", "line_manager"]
-    missing = [k for k in required_fields if k not in data or not data[k]]
-    if missing:
-        return jsonify({"error": f"Missing fields: {', '.join(missing)}"}), 400
-    prompt = PROFILE_PROMPT.format(**data)
-    response = openai.ChatCompletion.create(
-        model="gpt-4o",
-        messages=[{"role": "system", "content": prompt}]
-    )
-    return jsonify({"profile_summary": response.choices[0].message["content"]})
-
-# ---------------------- AI COMPANY CULTURE ENDPOINT --------------------
-
-CULTURE_PROMPT = """
-You are a company culture specialist. Summarize the company culture based on the following info:
-
-Company Type: {company_type}
-Performance Focus: {performance_focus}
-Values: {values}
-Management Style: {management_style}
-Team Dynamic: {team_dynamic}
-Notable Rituals: {rituals}
-
-Return a short paragraph and key culture tags (e.g., performance-based, flat hierarchy, long-term vision).
-"""
-
-@app.route("/ai/culture", methods=["POST"])
-def ai_culture():
-    data = request.get_json(force=True)
-    required_fields = ["company_type", "performance_focus", "values", "management_style", "team_dynamic", "rituals"]
-    missing = [k for k in required_fields if k not in data or not data[k]]
-    if missing:
-        return jsonify({"error": f"Missing fields: {', '.join(missing)}"}), 400
-    prompt = CULTURE_PROMPT.format(**data)
-    response = openai.ChatCompletion.create(
-        model="gpt-4o",
-        messages=[{"role": "system", "content": prompt}]
-    )
-    return jsonify({"culture_summary": response.choices[0].message["content"]})
-
-# ---------------------- AI COMPENSATION ENDPOINT -----------------------
-
-COMPENSATION_PROMPT = """
-You are a compensation analyst. Based on this job profile and location ({location}), suggest a fair salary range and typical perks. If you can't access exact market data, say 'Estimation only - confirm locally'.
-
-Job Profile: {job_profile}
-Company Type: {company_type}
-
-Return salary range (currency), typical bonus/equity, and a disclaimer if needed.
-"""
-
-@app.route("/ai/compensation", methods=["POST"])
-def ai_compensation():
-    data = request.get_json(force=True)
-    required_fields = ["location", "job_profile", "company_type"]
-    missing = [k for k in required_fields if k not in data or not data[k]]
-    if missing:
-        return jsonify({"error": f"Missing fields: {', '.join(missing)}"}), 400
-    prompt = COMPENSATION_PROMPT.format(**data)
-    response = openai.ChatCompletion.create(
-        model="gpt-4o",
-        messages=[{"role": "system", "content": prompt}]
-    )
-    return jsonify({"compensation_summary": response.choices[0].message["content"]})
-
 # ---------------------- EMPLOYER JOB ROUTES ----------------------------
 
-@app.route("/employer/jobs", methods=["GET"])
+@main_bp.route("/employer/jobs", methods=["GET"])
 def employer_jobs():
     email = request.args.get("email")
     archived = request.args.get("archived", "false").lower() == "true"
@@ -186,7 +94,7 @@ def employer_jobs():
     filtered.sort(key=lambda x: x.get("Job Creation Date", ""), reverse=True)
     return jsonify(filtered)
 
-@app.route("/employer/jobs/create", methods=["POST"])
+@main_bp.route("/employer/jobs/create", methods=["POST"])
 def create_job():
     data = request.form if not request.is_json else request.get_json(force=True)
     # Accept both field naming conventions
@@ -236,7 +144,7 @@ def create_job():
         print("[ERROR] Failed to append job:", str(e))
         return jsonify({"error": "Failed to update Google Sheet: " + str(e)}), 500
 
-@app.route("/employer/jobs/archive", methods=["POST"])
+@main_bp.route("/employer/jobs/archive", methods=["POST"])
 def archive_job():
     data = request.get_json(force=True)
     email = data.get("email")
@@ -263,7 +171,7 @@ def archive_job():
 
 # ---------------------- CANDIDATE MATCHING ROUTE -----------------------
 
-@app.route("/employer/match-candidates", methods=["POST"])
+@main_bp.route("/employer/match-candidates", methods=["POST"])
 def match_candidates():
     job = request.get_json(force=True)
     print("[MATCH JOB PAYLOAD]", job)
@@ -362,7 +270,7 @@ def match_candidates():
 
 # ---------------------- COMPANY PROFILE ROUTE --------------------------
 
-@app.route("/company/create", methods=["POST"])
+@main_bp.route("/company/create", methods=["POST"])
 def create_company():
     data = request.form if not request.is_json else request.get_json(force=True)
     required = ["Email", "companyName", "companyOverview", "companyLocation"]
@@ -388,7 +296,7 @@ def create_company():
 
 # ---------------------- CANDIDATE/CREDENTIAL ROUTES ---------------------
 
-@app.route("/signup", methods=["GET", "POST"])
+@main_bp.route("/signup", methods=["GET", "POST"])
 def signup():
     if request.method == "GET":
         return render_template("signup.html")
@@ -415,7 +323,7 @@ def signup():
     })
     return jsonify({"message": "Signup successful!"})
 
-@app.route("/login", methods=["GET", "POST"])
+@main_bp.route("/login", methods=["GET", "POST"])
 def login():
     if request.method == "GET":
         return render_template("login.html")
@@ -426,4 +334,65 @@ def login():
         print("[ERROR] Login missing fields:", missing_fields)
         print("[DEBUG] Login received:", dict(data))
         return jsonify({"error": f"Missing fields: {', '.join(missing_fields)}"}), 400
-    user = find_row_by_column
+    user = find_row_by_column("Users2", "Email", data["Email"])
+    if not user or not check_password_hash(user.get("Password", ""), data["Password"]):
+        return jsonify({"error": "Invalid credentials"}), 401
+
+    user_type_raw = None
+    for k in user:
+        if k.strip().lower() == "type":
+            user_type_raw = user[k]
+            break
+    user_type = str(user_type_raw).strip().capitalize() if user_type_raw else "Candidate"
+    if user_type not in ("Employer", "Candidate"):
+        user_type = "Candidate"
+
+    return jsonify({
+        "message": "Login successful!",
+        "type": user_type,
+        "email": user.get("Email"),
+        "name": user.get("Name")
+    })
+
+@main_bp.route("/user", methods=["GET"])
+def get_user():
+    email = request.args.get("email")
+    if not email:
+        return jsonify({"error": "Email required"}), 400
+    user = find_row_by_column("Users2", "Email", email)
+    if not user:
+        return jsonify({"error": "User not found"}), 404
+    return jsonify({"name": user.get("Name", "")})
+
+@main_bp.route("/candidate/profile", methods=["POST"])
+def create_candidate_profile():
+    data = request.get_json(force=True) if request.is_json else dict(request.form)
+    required_fields = ("Email", "Name", "Location", "Radius", "Summary")
+    if not all(k in data and data[k] for k in required_fields):
+        return jsonify({"error": "Missing fields"}), 400
+
+    # Geocode and store lat/lon if not already present
+    latitude, longitude = "", ""
+    if data.get("Latitude") and data.get("Longitude"):
+        latitude = data.get("Latitude")
+        longitude = data.get("Longitude")
+    else:
+        coords = get_coords(data["Location"])
+        if coords:
+            latitude, longitude = coords
+
+    append_row("Candidates2", {
+        "Email": data["Email"],
+        "Name": data["Name"],
+        "Location": data["Location"],
+        "Radius": str(data["Radius"]),
+        "Summary": data["Summary"],
+        "Salary": data.get("Salary", ""),
+        "Latitude": latitude,
+        "Longitude": longitude
+    })
+    return jsonify({"message": "Profile created!"})
+
+@main_bp.route("/test")
+def test():
+    return jsonify({"message": "API is up and running."})
