@@ -24,8 +24,8 @@ def ai_compensation():
     if missing:
         return jsonify({"error": f"Missing fields: {', '.join(missing)}"}), 400
     prompt = COMPENSATION_PROMPT.format(**data)
-    response = openai.ChatCompletion.create(
+    response = openai.chat.completions.create(
         model="gpt-4o",
         messages=[{"role": "system", "content": prompt}]
     )
-    return jsonify({"compensation_summary": response.choices[0].message["content"]})
+    return jsonify({"compensation_summary": response.choices[0].message.content})
